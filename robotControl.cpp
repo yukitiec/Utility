@@ -57,7 +57,7 @@ int main()
 	double acceleration = 0.3; //set acceleration
 	double velocity = 0.6; //set velocity
 	double omega = 0.6; // angular velocity
-	double Gain_vel = 700; // Gain for calculating velocity
+	double Gain_vel = 10; // Gain for calculating velocity
 	double Gain_angle = 60; // Gain for calculating velocity
 	double Gain_vel_diff; // Gain for calculating velocity
 	double Gain_angle_diff; // Gain for calculating velocity
@@ -66,27 +66,43 @@ int main()
 	double dt = 1.0 / 100; //move 500 fps, every 2msec sending signal to UR
 	double diff; // variable for calculating distance to target
 	std::vector<double> difference; //pose diffenrence between current and target
-	double vel_norm=0.0; //velocity norm for moving to target
-	double omega_norm=0.0; // angular velocity norm for moving target orientation
+	double difPositionNorm=0.0; //velocity norm for moving to target
+	double difAngleNorm=0.0; // angular velocity norm for moving target orientation
 
 	// 4 seconds control
 	int count_target = 0;
 	std::vector<double> target = targets[count_target];
+	std::cout << "10~(1/2)" << std::pow(10, 0.5) << std::endl;
 	for (unsigned int i = 0; i < 500; i++)
 	{
-		if (i %  150 == 149)
-		{
-			count_target += 1;
-			target = targets[count_target];
-			std::cout << "target has changed" << std::endl;
-		}
+		/* initialize */
+		difference.clear();
+		difPositionNorm = 0.0;
+		difAngleNorm = 0.0;
+		
 		std::chrono::steady_clock::time_point t_start = urCtrl.initPeriod(); //define time
 		pose_c = urDI.getActualTCPPose(); // get current pose
+		if (i % 100 == 50)
+		{
+			target = pose_c;
+			target[0] = target[0] + 0.1;
+		}
+		if (i % 100 == 0)
+		{
+			target = pose_c;
+			target[0] = target[0] - 0.1;
+		}
+		std::cout << "target position {";
+		for (int i = 0; i < target.size(); i++)
+		{
+			std::cout << target[i] << " ";
+		}
+		std::cout <<"}"<< std::endl;
 		// calculate distance to target
 		for (int j = 0; j < pose_c.size(); j++)
 		{
 			diff = target[j] - pose_c[j];
-			if (diff < 0.001)
+			if (std::abs(diff) < 0.0001)
 			{
 				diff = 0.0;
 			}
@@ -94,39 +110,57 @@ int main()
 			//calculate norm
 			if (j < 3)
 			{
-				vel_norm += diff * diff;
+				difPositionNorm += std::pow(diff,2);
 			}
 			else
 			{
-				omega_norm += diff * diff;
+				difAngleNorm += std::pow(diff,2);
 			}
 			std::cout << "distance to target : " <<j<<" : "<< diff << std::endl;
 		}
-		vel_norm = std::pow(vel_norm, 0.5);
-		omega_norm = std::pow(omega_norm, 0.5);
-		Gain_vel_diff = Gain_vel * vel_norm; //calculatenorm
+		difPositionNorm = std::pow(difPositionNorm, 0.5); //O(vel_norm) = 10e-3~10e-2[m]
+		std::cout << "Velocity :" << difPositionNorm << std::endl;
+		difAngleNorm = std::pow(difAngleNorm, 0.5);
+		std::cout << "angular velocity :" << difAngleNorm << std::endl;
+		Gain_vel_diff = Gain_vel * difPositionNorm; //calculatenorm
 		velocity_tmp = ((std::exp(Gain_vel_diff) - 1) / (std::exp(Gain_vel_diff) + 1)) * omega; //calculate velocity
-		Gain_angle_diff = Gain_angle * omega_norm; //calculatenorm
+		std::cout << "velocity after converted :" << velocity_tmp << std::endl;
+		Gain_angle_diff = Gain_angle * difAngleNorm; //calculatenorm
 		omega_tmp = ((std::exp(Gain_angle_diff) - 1) / (std::exp(Gain_angle_diff) + 1)) * omega; //calculate velocity
+		std::cout << "angular velocity after converted :" << omega_tmp << std::endl;
 		// calculate target pose velocity
 		for (int j = 0; j < pose_c.size(); j++)
 		{
-			//velocity
+			/* velocity */
 			if (j < 3)
 			{
-				
-				difference[j] = (velocity_tmp * difference[j] / vel_norm);
-				if (difference[j] < 0.001)
+				/* larger than 1 mm */
+				if (difPositionNorm >= 0.001)
+				{
+					difference[j] = (velocity_tmp * difference[j] / difPositionNorm);
+					if (std::abs(difference[j]) < 0.0001)
+					{
+						difference[j] = 0.0;
+					}
+				}
+				/* smaller than 1 mm */
+				else
 				{
 					difference[j] = 0.0;
 				}
-				
-			
 			}
+			/* angular velocity */
 			else
 			{
-				difference[j] = (omega_tmp * difference[j] / vel_norm);
-				if (difference[j] < 0.001)
+				if (difAngleNorm >= 0.01)
+				{
+					difference[j] = (omega_tmp * difference[j] / difAngleNorm);
+					if (std::abs(difference[j]) < 0.001)
+					{
+						difference[j] = 0.0;
+					}
+				}
+				else
 				{
 					difference[j] = 0.0;
 				}
