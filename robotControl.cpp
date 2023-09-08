@@ -58,7 +58,7 @@ int main()
 	double velocity = 0.6; //set velocity
 	double omega = 0.6; // angular velocity
 	double Gain_vel = 10; // Gain for calculating velocity
-	double Gain_angle = 60; // Gain for calculating velocity
+	double Gain_angle = 1.0; // Gain for calculating velocity
 	double Gain_vel_diff; // Gain for calculating velocity
 	double Gain_angle_diff; // Gain for calculating velocity
 	double velocity_tmp; //for temporary velocity
