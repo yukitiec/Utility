@@ -1,17 +1,17 @@
-// ximea_test.cpp : �R���\�[�� �A�v���P�[�V�����̃G���g�� �|�C���g���`���܂��B
+﻿// ximea_test.cpp : コンソール アプリケーションのエントリ ポイントを定義します。
 //
 
 #include "stdafx.h"
 
 /**
- * @brief �T�C�Y���l������ROI���쐬
- *
- * @param[in] center �g���b�L���O�_�̑O�t���[���̈ʒu�iROI�̒��S�j
- * @param[in] src ���͉摜
- * @param[in] roiBase ROI�̘g
- * @return ROI�摜
- */
-cv::Mat createROI(cv::Point2d &center, const cv::Mat &src, const cv::Rect &roiBase)
+* @brief サイズを考慮してROIを作成
+*
+* @param[in] center トラッキング点の前フレームの位置（ROIの中心）
+* @param[in] src 入力画像
+* @param[in] roiBase ROIの枠
+* @return ROI画像
+*/
+cv::Mat createROI(cv::Point2d& center, const cv::Mat& src, const cv::Rect& roiBase)
 {
     return src((roiBase + cv::Point(center)) & cv::Rect(cv::Point(0, 0), src.size()));
 }
@@ -39,9 +39,9 @@ const int BASELINE = 280; // distance between 2 cameras
 /* revise here based on camera calibration */
 
 const cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 179, 0, 160, // fx: focal length in x, cx: principal point x
-                              0, 179, 160,                           // fy: focal length in y, cy: principal point y
-                              0, 0, 1                                // 1: scaling factor
-);
+    0, 179, 160,                           // fy: focal length in y, cy: principal point y
+    0, 0, 1                                // 1: scaling factor
+    );
 cv::Mat distCoeffs = (cv::Mat_<double>(1, 5) << 1, 1, 1, 1, 1);
 
 /* revise here based on camera calibration */
@@ -51,7 +51,7 @@ const int TARGET_DEPTH = 400; // catching point is 40 cm away from camera positi
  * const char* trackbar_label = "Method: \n 0: SQDIFF \n 1: SQDIFF NORMED \n 2: TM CCORR \n 3: TM CCORR NORMED \n 4: TM CCOEFF \n 5: TM CCOEFF NORMED"; 2 is not so good
  */
 
-// queue definition
+ // queue definition
 std::queue<std::array<cv::Mat1b, 2>> queueFrame; // queue for frame
 std::queue<int> queueFrameIndex;                 // queue for frame index
 
@@ -84,47 +84,47 @@ std::queue<std::vector<int>> queueTargetClassIndexesRight;  // class from templa
 
 // declare function
 /* utility */
-void checkStorage(std::vector<std::vector<cv::Rect2d>> &);
-void checkClassStorage(std::vector<std::vector<int>> &);
+void checkStorage(std::vector<std::vector<cv::Rect2d>>&);
+void checkClassStorage(std::vector<std::vector<int>>&);
 /* get img */
-bool getImagesFromQueueYolo(std::array<cv::Mat1b, 2> &, int &); // get image from queue
-bool getImagesFromQueueTM(std::array<cv::Mat1b, 2> &, int &);
+bool getImagesFromQueueYolo(std::array<cv::Mat1b, 2>&, int&); // get image from queue
+bool getImagesFromQueueTM(std::array<cv::Mat1b, 2>&, int&);
 /* template matching */
 void templateMatching();                                                                                                                                  // void* //proto definition
-void templateMatchingForLeft(cv::Mat1b &, const int, std::vector<cv::Mat1b> &, std::vector<std::vector<cv::Rect2d>> &, std::vector<std::vector<int>> &);  //, int, int, float, const int);
-void templateMatchingForRight(cv::Mat1b &, const int, std::vector<cv::Mat1b> &, std::vector<std::vector<cv::Rect2d>> &, std::vector<std::vector<int>> &); // , int, int, float, const int);
-void combineYoloTMData(std::vector<int> &, std::vector<int> &, std::vector<cv::Mat1b> &, std::vector<cv::Mat1b> &, std::vector<cv::Rect2d> &,
-                       std::vector<cv::Rect2d> &, std::vector<cv::Mat1b> &, std::vector<cv::Rect2d> &, std::vector<int> &, std::vector<bool> &, const int &);
-void getTemplateMatchingDataLeft(bool &, std::vector<int> &, std::vector<cv::Rect2d> &, std::vector<cv::Mat1b> &, std::vector<bool> &, int &);
-void getTemplateMatchingDataRight(bool &, std::vector<int> &, std::vector<cv::Rect2d> &, std::vector<cv::Mat1b> &, std::vector<bool> &, int &);
-void processTM(std::vector<int> &, std::vector<cv::Mat1b> &, std::vector<bool> &, std::vector<cv::Rect2d> &, cv::Mat1b &,
-               std::vector<cv::Mat1b> &, std::vector<cv::Rect2d> &, std::vector<int> &, std::vector<bool> &);
+void templateMatchingForLeft(cv::Mat1b&, const int, std::vector<cv::Mat1b>&, std::vector<std::vector<cv::Rect2d>>&, std::vector<std::vector<int>>&);  //, int, int, float, const int);
+void templateMatchingForRight(cv::Mat1b&, const int, std::vector<cv::Mat1b>&, std::vector<std::vector<cv::Rect2d>>&, std::vector<std::vector<int>>&); // , int, int, float, const int);
+void combineYoloTMData(std::vector<int>&, std::vector<int>&, std::vector<cv::Mat1b>&, std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&,
+    std::vector<cv::Rect2d>&, std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&, std::vector<int>&, std::vector<bool>&, const int&);
+void getTemplateMatchingDataLeft(bool&, std::vector<int>&, std::vector<cv::Rect2d>&, std::vector<cv::Mat1b>&, std::vector<bool>&, int&);
+void getTemplateMatchingDataRight(bool&, std::vector<int>&, std::vector<cv::Rect2d>&, std::vector<cv::Mat1b>&, std::vector<bool>&, int&);
+void processTM(std::vector<int>&, std::vector<cv::Mat1b>&, std::vector<bool>&, std::vector<cv::Rect2d>&, cv::Mat1b&,
+    std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&, std::vector<int>&, std::vector<bool>&);
 /* access yolo data */
-void getYoloDataLeft(std::vector<cv::Mat1b> &, std::vector<cv::Rect2d> &, std::vector<int> &);
-void getYoloDataRight(std::vector<cv::Mat1b> &, std::vector<cv::Rect2d> &, std::vector<int> &);
-void push2YoloDataRight(std::vector<cv::Rect2d> &, std::vector<int> &);
-void push2YoloDataLeft(std::vector<cv::Rect2d> &, std::vector<int> &);
+void getYoloDataLeft(std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&, std::vector<int>&);
+void getYoloDataRight(std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&, std::vector<int>&);
+void push2YoloDataRight(std::vector<cv::Rect2d>&, std::vector<int>&);
+void push2YoloDataLeft(std::vector<cv::Rect2d>&, std::vector<int>&);
 /* read img */
-void pushFrame(std::array<cv::Mat1b, 2> &, const int);
+void pushFrame(std::array<cv::Mat1b, 2>&, const int);
 /* Target Prediction */
 void targetPredict();
-void updateTrackingData(std::vector<std::vector<std::vector<int>>> &, std::vector<std::vector<std::vector<int>>> &, std::vector<std::vector<int>> &, std::vector<std::vector<int>> &);
-bool getTargetData(int &, std::vector<int> &, std::vector<int> &, std::vector<cv::Rect2d> &, std::vector<cv::Rect2d> &, bool &, bool &);
-void convertRoi2Center(std::vector<int> &, std::vector<cv::Rect2d> &, const int &, std::vector<std::vector<int>> &);
-void adjustData(std::vector<std::vector<int>> &, std::vector<std::vector<std::vector<int>>> &, std::vector<std::vector<int>> &, std::vector<int> &, std::vector<int> &);
-void getLatestData(std::vector<std::vector<std::vector<int>>> &, std::vector<std::vector<int>> &);
-void getLatestClass(std::vector<std::vector<int>> &, std::vector<int> &);
-bool sortByCenterX(const std::vector<int> &, const std::vector<int> &);
-void sortData(std::vector<std::vector<int>> &, std::vector<int> &);
+void updateTrackingData(std::vector<std::vector<std::vector<int>>>&, std::vector<std::vector<std::vector<int>>>&, std::vector<std::vector<int>>&, std::vector<std::vector<int>>&);
+bool getTargetData(int&, std::vector<int>&, std::vector<int>&, std::vector<cv::Rect2d>&, std::vector<cv::Rect2d>&, bool&, bool&);
+void convertRoi2Center(std::vector<int>&, std::vector<cv::Rect2d>&, const int&, std::vector<std::vector<int>>&);
+void adjustData(std::vector<std::vector<int>>&, std::vector<std::vector<std::vector<int>>>&, std::vector<std::vector<int>>&, std::vector<int>&, std::vector<int>&);
+void getLatestData(std::vector<std::vector<std::vector<int>>>&, std::vector<std::vector<int>>&);
+void getLatestClass(std::vector<std::vector<int>>&, std::vector<int>&);
+bool sortByCenterX(const std::vector<int>&, const std::vector<int>&);
+void sortData(std::vector<std::vector<int>>&, std::vector<int>&);
 /* trajectory prediction */
-void curveFitting(const std::vector<std::vector<int>> &, std::vector<float> &);     // curve fitting
-void linearRegression(const std::vector<std::vector<int>> &, std::vector<float> &); // linear regression
-void linearRegressionZ(const std::vector<std::vector<int>> &, std::vector<float> &);
-void trajectoryPredict2D(std::vector<std::vector<std::vector<int>>> &, std::vector<std::vector<float>> &, std::vector<std::vector<float>> &, std::vector<int> &);
-float calculateME(std::vector<float> &, std::vector<float> &, std::vector<float> &, std::vector<float> &);
-void dataMatching(std::vector<std::vector<float>> &, std::vector<std::vector<float>> &, std::vector<std::vector<float>> &, std::vector<std::vector<float>> &,
-                  std::vector<int> &, std::vector<int> &, std::vector<std::vector<std::vector<int>>> &, std::vector<std::vector<std::vector<int>>> &, std::vector<std::vector<std::vector<std::vector<int>>>> &);
-void predict3DTargets(std::vector<std::vector<std::vector<std::vector<int>>>> &, std::vector<std::vector<int>> &);
+void curveFitting(const std::vector<std::vector<int>>&, std::vector<float>&);     // curve fitting
+void linearRegression(const std::vector<std::vector<int>>&, std::vector<float>&); // linear regression
+void linearRegressionZ(const std::vector<std::vector<int>>&, std::vector<float>&);
+void trajectoryPredict2D(std::vector<std::vector<std::vector<int>>>&, std::vector<std::vector<float>>&, std::vector<std::vector<float>>&, std::vector<int>&);
+float calculateME(std::vector<float>&, std::vector<float>&, std::vector<float>&, std::vector<float>&);
+void dataMatching(std::vector<std::vector<float>>&, std::vector<std::vector<float>>&, std::vector<std::vector<float>>&, std::vector<std::vector<float>>&,
+    std::vector<int>&, std::vector<int>&, std::vector<std::vector<std::vector<int>>>&, std::vector<std::vector<std::vector<int>>>&, std::vector<std::vector<std::vector<std::vector<int>>>>&);
+void predict3DTargets(std::vector<std::vector<std::vector<std::vector<int>>>>&, std::vector<std::vector<int>>&);
 
 /*  YOLO class definition  */
 class YOLODetect
@@ -132,14 +132,14 @@ class YOLODetect
 private:
     torch::jit::script::Module mdl;
     torch::DeviceType devicetype;
-    torch::Device *device;
+    torch::Device* device;
 
     std::string yolofilePath = "yolov8n_epoch2200.torchscript";
     int frameWidth = 320;
     int frameHeight = 320;
     const int yoloWidth = 320;
     const int yoloHeight = 320;
-    const cv::Size YOLOSize{yoloWidth, yoloHeight};
+    const cv::Size YOLOSize{ yoloWidth, yoloHeight };
     const float IoUThreshold = 0.45;
     const float ConfThreshold = 0.4;
     const float IoUThresholdIdentity = 0.25; // for maitainig consistency of tracking
@@ -179,7 +179,7 @@ public:
     };
     ~YOLODetect() { delete device; }; // Deconstructor
 
-    void detectLeft(cv::Mat1b &frame, const int frameIndex, std::vector<std::vector<cv::Rect2d>> &posSaver, std::vector<std::vector<int>> &classSaver)
+    void detectLeft(cv::Mat1b& frame, const int frameIndex, std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver)
     {
         /* inference by YOLO
          *  Args:
@@ -190,7 +190,7 @@ public:
          *      queueClassIndex : queue for pushing detected
          */
 
-        /* preprocess img */
+         /* preprocess img */
         torch::Tensor imgTensor;
         preprocessImg(frame, imgTensor);
         // std::cout << "finish preprocess" << std::endl;
@@ -201,7 +201,7 @@ public:
         /* wrap to disable grad calculation */
         {
             torch::NoGradGuard no_grad;
-            preds = mdl.forward({imgTensor}).toTensor(); // preds shape : [1,6,2100]
+            preds = mdl.forward({ imgTensor }).toTensor(); // preds shape : [1,6,2100]
         }
         // std::cout << "finish inference" << std::endl;
         /* get latest data */
@@ -216,7 +216,7 @@ public:
         }
         /* postProcess */
         // std::cout << "post process" << std::endl;
-        preds = preds.permute({0, 2, 1}); // change order : (1,6,2100) -> (1,2100,6)
+        preds = preds.permute({ 0, 2, 1 }); // change order : (1,6,2100) -> (1,2100,6)
         // std::cout << "permute" << std::endl;
         // std::cout << "preds size : " << preds.sizes() << std::endl;
         std::vector<torch::Tensor> detectedBoxes0Left, detectedBoxes1Left; //(n,6),(m,6)
@@ -231,7 +231,7 @@ public:
         if (!existedClass.empty())
         {
             std::cout << "existed class after roisetting of Ball:" << std::endl;
-            for (const int &classIndex : existedClass)
+            for (const int& classIndex : existedClass)
             {
                 std::cout << classIndex << " ";
             }
@@ -239,10 +239,10 @@ public:
         }
         roiSetting(detectedBoxes1Left, existedRoi, existedClass, newRoi, newClass, BOX, bboxesCandidateTMLeft, existedClass);
         /* in Ball roisetting update all classIndexesTMLeft to existedClass, so here adapt existedClass as a reference class */
-        if (!classBox.empty())
+        if (!existedClass.empty())
         {
             std::cout << "existedClass after roiSetting of Box:" << std::endl;
-            for (const int &classIndex : existedClass)
+            for (const int& classIndex : existedClass)
             {
                 std::cout << classIndex << " ";
             }
@@ -252,7 +252,7 @@ public:
         push2QueueLeft(existedRoi, newRoi, existedClass, newClass, frame, posSaver, classSaver);
     };
 
-    void detectRight(cv::Mat1b &frame, const int frameIndex, std::vector<std::vector<cv::Rect2d>> &posSaver, std::vector<std::vector<int>> &classSaver)
+    void detectRight(cv::Mat1b& frame, const int frameIndex, std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver)
     {
         /* inference by YOLO
          *  Args:
@@ -262,12 +262,12 @@ public:
          *      queueYoloBbox : queue for pushing detected roi, or if available, get candidate position,
          *      queueClassIndex : queue for pushing detected
          */
-        // bbox0.resize(0);
-        // bbox1.resize(0);
-        // clsidx.resize(0);
-        // predscore.resize(0);
+         // bbox0.resize(0);
+         // bbox1.resize(0);
+         // clsidx.resize(0);
+         // predscore.resize(0);
 
-        /* preprocess img */
+         /* preprocess img */
         torch::Tensor imgTensor;
         preprocessImg(frame, imgTensor);
         /* inference */
@@ -276,7 +276,7 @@ public:
         /* wrap to disable grad calculation */
         {
             torch::NoGradGuard no_grad;
-            preds = mdl.forward({imgTensor}).toTensor(); // preds shape : [1,6,2100]
+            preds = mdl.forward({ imgTensor }).toTensor(); // preds shape : [1,6,2100]
         }
         // auto stopInference = std::chrono::high_resolution_clock::now();
         // auto durationInference = std::chrono::duration_cast<std::chrono::milliseconds>(stopInference - startInference);
@@ -290,7 +290,7 @@ public:
             getYoloDataRight(bboxesCandidateTMRight, classIndexesTMRight); // get latest data
         }
         /* postProcess*/
-        preds = preds.permute({0, 2, 1});                                    // change order : (1,6,8400) -> (1,8400,6)
+        preds = preds.permute({ 0, 2, 1 });                                    // change order : (1,6,8400) -> (1,8400,6)
         std::vector<torch::Tensor> detectedBoxes0Right, detectedBoxes1Right; //(n,6),(m,6)
         non_max_suppression2(preds, detectedBoxes0Right, detectedBoxes1Right, ConfThreshold, IoUThreshold);
 
@@ -302,7 +302,7 @@ public:
         if (!existedClass.empty())
         {
             std::cout << "existed class after roisetting of Ball:" << std::endl;
-            for (const int &classIndex : existedClass)
+            for (const int& classIndex : existedClass)
             {
                 std::cout << classIndex << " ";
             }
@@ -310,10 +310,10 @@ public:
         }
         roiSetting(detectedBoxes1Right, existedRoi, existedClass, newRoi, newClass, BOX, bboxesCandidateTMRight, existedClass);
         /* in Ball roisetting update all classIndexesTMRight to existedClass, so here adapt existedClass as a reference class */
-        if (!classBox.empty())
+        if (!existedClass.empty())
         {
             std::cout << "existedClass after roiSetting of Box:" << std::endl;
-            for (const int &classIndex : existedClass)
+            for (const int& classIndex : existedClass)
             {
                 std::cout << classIndex << " ";
             }
@@ -323,21 +323,21 @@ public:
         push2QueueRight(existedRoi, newRoi, existedClass, newClass, frame, posSaver, classSaver);
     };
 
-    void preprocessImg(cv::Mat1b &frame, torch::Tensor &imgTensor)
+    void preprocessImg(cv::Mat1b& frame, torch::Tensor& imgTensor)
     {
         // run
         cv::Mat yoloimg; // define yolo img type
         cv::resize(frame, yoloimg, YOLOSize);
         cv::cvtColor(yoloimg, yoloimg, cv::COLOR_GRAY2RGB);
-        imgTensor = torch::from_blob(yoloimg.data, {yoloimg.rows, yoloimg.cols, 3}, torch::kByte); // vector to tensor
-        imgTensor = imgTensor.permute({2, 0, 1});                                                  // Convert shape from (H,W,C) -> (C,H,W)
+        imgTensor = torch::from_blob(yoloimg.data, { yoloimg.rows, yoloimg.cols, 3 }, torch::kByte); // vector to tensor
+        imgTensor = imgTensor.permute({ 2, 0, 1 });                                                  // Convert shape from (H,W,C) -> (C,H,W)
         imgTensor = imgTensor.toType(torch::kFloat);                                               // convert to float type
         imgTensor = imgTensor.div(255);                                                            // normalization
         imgTensor = imgTensor.unsqueeze(0);                                                        // expand dims for Convolutional layer (height,width,1)
         imgTensor = imgTensor.to(*device);                                                         // transport data to GPU
     }
 
-    void non_max_suppression2(torch::Tensor &prediction, std::vector<torch::Tensor> &detectedBoxes0, std::vector<torch::Tensor> &detectedBoxes1, float confThreshold, float iouThreshold)
+    void non_max_suppression2(torch::Tensor& prediction, std::vector<torch::Tensor>& detectedBoxes0, std::vector<torch::Tensor>& detectedBoxes1, float confThreshold, float iouThreshold)
     {
         /* non max suppression : remove overlapped bbox
          * Args:
@@ -413,7 +413,7 @@ public:
         }
     }
 
-    torch::Tensor xywh2xyxy(torch::Tensor &x)
+    torch::Tensor xywh2xyxy(torch::Tensor& x)
     {
         torch::Tensor y = x.clone();
         y[0] = x[0] - x[2] / 2; // left
@@ -423,7 +423,7 @@ public:
         return y;
     }
 
-    void nms(torch::Tensor &x, std::vector<torch::Tensor> &detectedBoxes, float &iouThreshold)
+    void nms(torch::Tensor& x, std::vector<torch::Tensor>& detectedBoxes, float& iouThreshold)
     {
         /* calculate IoU for excluding overlapped bboxes
          *
@@ -440,7 +440,7 @@ public:
 
             bool addBox = true; // if save bbox as a new detection
 
-            for (const torch::Tensor &savedBox : detectedBoxes)
+            for (const torch::Tensor& savedBox : detectedBoxes)
             {
                 float iou = calculateIoU(box, savedBox); // calculate IoU
                 /* same bbox : already found -> nod add */
@@ -458,7 +458,7 @@ public:
         }
     }
 
-    float calculateIoU(const torch::Tensor &box1, const torch::Tensor &box2)
+    float calculateIoU(const torch::Tensor& box1, const torch::Tensor& box2)
     {
         float left = std::max(box1[0].item<float>(), box2[0].item<float>());
         float top = std::max(box1[1].item<float>(), box2[1].item<float>());
@@ -478,8 +478,8 @@ public:
         return 0.0f; // No overlap
     }
 
-    void roiSetting(std::vector<torch::Tensor> &detectedBoxes, std::vector<cv::Rect2d> &existedRoi, std::vector<int> &existedClass, std::vector<cv::Rect2d> &newRoi, std::vector<int> &newClass,
-                    int candidateIndex, std::vector<cv::Rect2d> &bboxesCandidate, std::vector<int> &classIndexesTM)
+    void roiSetting(std::vector<torch::Tensor>& detectedBoxes, std::vector<cv::Rect2d>& existedRoi, std::vector<int>& existedClass, std::vector<cv::Rect2d>& newRoi, std::vector<int>& newClass,
+        int candidateIndex, std::vector<cv::Rect2d>& bboxesCandidate, std::vector<int>& classIndexesTM)
     {
         /*
          * Get current data before YOLO inference started.
@@ -489,7 +489,7 @@ public:
          * Fourth : return all class indexes including -1 (not tracked one) for maintainig data consistency
          */
 
-        /* detected by Yolo */
+         /* detected by Yolo */
         if (!detectedBoxes.empty())
         {
             /* some trackers exist */
@@ -528,14 +528,14 @@ public:
                 bboxesYolo.reserve(20);
                 for (int i = 0; i < numBboxes; ++i)
                 {
-                    float expandrate[2] = {static_cast<float>(frameWidth) / static_cast<float>(yoloWidth), static_cast<float>(frameHeight) / static_cast<float>(yoloHeight)}; // resize bbox to fit original img size
+                    float expandrate[2] = { static_cast<float>(frameWidth) / static_cast<float>(yoloWidth), static_cast<float>(frameHeight) / static_cast<float>(yoloHeight) }; // resize bbox to fit original img size
                     // std::cout << "expandRate :" << expandrate[0] << "," << expandrate[1] << std::endl;
                     left = static_cast<int>(detectedBoxes[i][0].item().toFloat() * expandrate[0]);
                     top = static_cast<int>(detectedBoxes[i][1].item().toFloat() * expandrate[1]);
                     right = static_cast<int>(detectedBoxes[i][2].item().toFloat() * expandrate[0]);
                     bottom = static_cast<int>(detectedBoxes[i][3].item().toFloat() * expandrate[1]);
-                    updatedBboxes.emplace_back(left, top, (right - left), (bottom - top));
-                    updatedClassIndexes.push_back(candidateIndex);
+                    newRoi.emplace_back(left, top, (right - left), (bottom - top));
+                    newClass.push_back(candidateIndex);
                 }
             }
         }
@@ -567,7 +567,7 @@ public:
                         /* else classIndex != candidateIndex */
                         else if (classIndex == -1)
                         {
-                            updatedClassIndexes.push_back(-1);
+                            existedClass.push_back(-1);
                         }
                     }
                 }
@@ -601,7 +601,7 @@ public:
         }
     }
 
-    float calculateIoU_Rect2d(const cv::Rect2d &box1, const cv::Rect2d &box2)
+    float calculateIoU_Rect2d(const cv::Rect2d& box1, const cv::Rect2d& box2)
     {
         float left = std::max(box1.x, box2.x);
         float top = std::max(box1.y, box2.y);
@@ -621,9 +621,9 @@ public:
         return 0.0f; // No overlap
     }
 
-    void comparisonTMYolo(std::vector<torch::Tensor> &detectedBoxes, std::vector<int> &classIndexesTM, int &candidateIndex,
-                          std::vector<cv::Rect2d> &bboxesCandidate, std::vector<cv::Rect2d> &bboxesYolo,
-                          std::vector<cv::Rect2d> &existedRoi, std::vector<int> &existedClass)
+    void comparisonTMYolo(std::vector<torch::Tensor>& detectedBoxes, std::vector<int>& classIndexesTM, int& candidateIndex,
+        std::vector<cv::Rect2d>& bboxesCandidate, std::vector<cv::Rect2d>& bboxesYolo,
+        std::vector<cv::Rect2d>& existedRoi, std::vector<int>& existedClass)
     {
         /* constant setting */
         int numBboxes = detectedBoxes.size(); // num of detection
@@ -636,7 +636,7 @@ public:
         /* iterate for numBboxes */
         for (int i = 0; i < numBboxes; ++i)
         {
-            float expandrate[2] = {static_cast<float>(frameWidth) / static_cast<float>(yoloWidth), static_cast<float>(frameHeight) / static_cast<float>(yoloHeight)}; // resize bbox to fit original img size
+            float expandrate[2] = { static_cast<float>(frameWidth) / static_cast<float>(yoloWidth), static_cast<float>(frameHeight) / static_cast<float>(yoloHeight) }; // resize bbox to fit original img size
             // std::cout << "expandRate :" << expandrate[0] << "," << expandrate[1] << std::endl;
             left = static_cast<int>(detectedBoxes[i][0].item().toFloat() * expandrate[0]);
             top = static_cast<int>(detectedBoxes[i][1].item().toFloat() * expandrate[1]);
@@ -701,7 +701,7 @@ public:
                                 existedClass.at(counterIteration) = candidateIndex;
                             }
                             std::cout << "TM and Yolo Tracker matched!" << std::endl;
-                            existedBboxes.push_back(bboxTemp);
+                            existedRoi.push_back(bboxTemp);
                             // delete candidate bbox
                             bboxesYolo.erase(bboxesYolo.begin() + indexMatch); // erase detected bbox from bboxes Yolo -> number of bboxesYolo decrease
                         }
@@ -711,12 +711,12 @@ public:
                             std::cout << "TM and Yolo Tracker didn't match" << std::endl;
                             existedClass.push_back(-1);
                         }
-                        bboxesCandidateTM.erase(bboxesCandidateTM.begin() + counterCandidateTM); // delete TM latest roi to maintain roi order
+                        bboxesCandidate.erase(bboxesCandidate.begin() + counterCandidateTM); // delete TM latest roi to maintain roi order
                     }
                     /* other labels -> push back same label to maintain order only when candidateIndex=0 */
                     else if (candidateIndex < classIndex && candidateIndex == 0)
                     {
-                        existedClass.push_pach(classIndex);
+                        existedClass.push_back(classIndex);
                         counterCandidateTM++; // for maintain order of existed roi
                     }
                     /* only valid if classIndex != 0 */
@@ -745,12 +745,12 @@ public:
                 if (classIndex == candidateIndex && candidateIndex == 0)
                 {
                     existedClass.push_back(-1);
-                    bboxesCandidateTM.erase(bboxesCandidateTM.begin() + counterCandidateTM); // delete TM latest roi to maintain roi order
+                    bboxesCandidate.erase(bboxesCandidate.begin() + counterCandidateTM); // delete TM latest roi to maintain roi order
                 }
                 else if (classIndex == candidateIndex && candidateIndex != 0)
                 {
                     existedClass.at(counterIteration) = -1;                                  // update label as -1
-                    bboxesCandidateTM.erase(bboxesCandidateTM.begin() + counterCandidateTM); // delete TM latest roi to maintain roi order
+                    bboxesCandidate.erase(bboxesCandidate.begin() + counterCandidateTM); // delete TM latest roi to maintain roi order
                 }
                 /* else classIndex != candidateIndex */
                 else if (classIndex != -1 && candidateIndex == 0)
@@ -761,16 +761,16 @@ public:
                 /* else classIndex != candidateIndex */
                 else if (classIndex == -1 && candidateIndex == 0)
                 {
-                    updatedClassIndexes.push_back(-1);
+                    existedClass.push_back(-1);
                 }
             }
             counterIteration++;
         }
     }
 
-    void push2QueueLeft(std::vector<cv::Rect2d> &existedRoi, std::vector<cv::Rect2d> &newRoi,
-                        std::vector<int> &existedClass, std::vector<int> &newClass, cv::Mat1b &frame,
-                        std::vector<std::vector<cv::Rect2d>> &posSaver, std::vector<std::vector<int>> &classSaver)
+    void push2QueueLeft(std::vector<cv::Rect2d>& existedRoi, std::vector<cv::Rect2d>& newRoi,
+        std::vector<int>& existedClass, std::vector<int>& newClass, cv::Mat1b& frame,
+        std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver)
     {
         /*
          * push detection data to queueuLeft
@@ -813,15 +813,15 @@ public:
         }
     }
 
-    void push2QueueRight(std::vector<cv::Rect2d> &existedRoi, std::vector<cv::Rect2d> &newRoi,
-                         std::vector<int> &existedClass, std::vector<int> &newClass, cv::Mat1b &frame,
-                         std::vector<std::vector<cv::Rect2d>> &posSaver, std::vector<std::vector<int>> &classSaver)
+    void push2QueueRight(std::vector<cv::Rect2d>& existedRoi, std::vector<cv::Rect2d>& newRoi,
+        std::vector<int>& existedClass, std::vector<int>& newClass, cv::Mat1b& frame,
+        std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver)
     {
         /*
          * push detection data to queueuRight
          */
 
-        /* both objects detected */
+         /* both objects detected */
         std::vector<cv::Rect2d> updatedRoi;
         updatedRoi.reserve(20);
         std::vector<cv::Mat1b> updatedTemplates;
@@ -859,21 +859,21 @@ public:
         }
     }
 
-    void updateData(std::vector<cv::Rect2d> &existedRoi, std::vector<cv::Rect2d> &newRoi, std::vector<int> &existedClass, std::vector<int> &newClass,
-                    cv::Mat1b &frame, std::vector<cv::Rect2d> &updatedRoi, std::vector<cv::Mat1b> &updatedTemplates,
-                    std::vector<int> &updatedClassIndexes)
+    void updateData(std::vector<cv::Rect2d>& existedRoi, std::vector<cv::Rect2d>& newRoi, std::vector<int>& existedClass, std::vector<int>& newClass,
+        cv::Mat1b& frame, std::vector<cv::Rect2d>& updatedRoi, std::vector<cv::Mat1b>& updatedTemplates,
+        std::vector<int>& updatedClassIndexes)
     {
         std::cout << "updateData function" << std::endl;
         /* firstly add existed class and ROi*/
         if (!existedRoi.empty())
         {
             /* update bbox and templates */
-            for (const cv::Rect2d &roi : existedRoi)
+            for (const cv::Rect2d& roi : existedRoi)
             {
                 updatedRoi.push_back(roi);
                 updatedTemplates.push_back(frame(roi));
             }
-            for (const int &classIndex : existedClass)
+            for (const int& classIndex : existedClass)
             {
                 updatedClassIndexes.push_back(classIndex);
                 std::cout << classIndex << " ";
@@ -884,7 +884,7 @@ public:
         {
             if (!existedClass.empty())
             {
-                for (const int &classIndex : existedClass)
+                for (const int& classIndex : existedClass)
                 {
                     updatedClassIndexes.push_back(classIndex);
                     std::cout << classIndex << " ";
@@ -895,12 +895,12 @@ public:
         /* secondly add new roi and class */
         if (!newRoi.empty())
         {
-            for (const cv::Rect2d &roi : newRoi)
+            for (const cv::Rect2d& roi : newRoi)
             {
                 updatedRoi.push_back(roi);
                 updatedTemplates.push_back(frame(roi));
             }
-            for (const int &classIndex : newClass)
+            for (const int& classIndex : newClass)
             {
                 updatedClassIndexes.push_back(classIndex);
                 std::cout << classIndex << " ";
@@ -911,7 +911,7 @@ public:
         {
             if (newClass.empty())
             {
-                for (const int &classIndex : newClass)
+                for (const int& classIndex : newClass)
                 {
                     updatedClassIndexes.push_back(classIndex);
                     std::cout << classIndex << " ";
@@ -921,7 +921,7 @@ public:
         }
     }
 
-    void drawRectangle(cv::Mat1b frame, std::vector<cv::Rect2d> &ROI, int index)
+    void drawRectangle(cv::Mat1b frame, std::vector<cv::Rect2d>& ROI, int index)
     {
         if (ROI.size() != 0)
         {
@@ -942,7 +942,7 @@ public:
         }
     }
 
-    void getYoloDataLeft(std::vector<cv::Rect2d> &bboxes, std::vector<int> &classes)
+    void getYoloDataLeft(std::vector<cv::Rect2d>& bboxes, std::vector<int>& classes)
     {
         std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
         // std::cout << "Left Img : Yolo bbox available from TM " << std::endl;
@@ -952,7 +952,7 @@ public:
             queueYoloBboxLeft.pop();            // remove yolo bbox
             /* for debug */
             std::cout << ":: Left :: latest yolo data " << std::endl;
-            for (const cv::Rect2d &bbox : bboxes)
+            for (const cv::Rect2d& bbox : bboxes)
             {
                 std::cout << "BBOX ::" << bbox.x << "," << bbox.y << "," << bbox.width << "," << bbox.height << std::endl;
             }
@@ -962,7 +962,7 @@ public:
             classes = queueYoloClassIndexLeft.front(); // get current tracking status
             queueYoloClassIndexLeft.pop();
             std::cout << "::class label :: ";
-            for (const int &classIndex : classes)
+            for (const int& classIndex : classes)
             {
                 std::cout << classIndex << " ";
             }
@@ -970,7 +970,7 @@ public:
         }
     }
 
-    void getYoloDataRight(std::vector<cv::Rect2d> &bboxes, std::vector<int> &classes)
+    void getYoloDataRight(std::vector<cv::Rect2d>& bboxes, std::vector<int>& classes)
     {
         std::unique_lock<std::mutex> lock(mtxYoloRight); // Lock the mutex
         std::cout << ":: Right Img :: Yolo bbox available from TM " << std::endl;
@@ -980,7 +980,7 @@ public:
             queueYoloBboxRight.pop();            // remove yolo bbox
             /* for debug */
             std::cout << "Left :: latest yolo data " << std::endl;
-            for (const cv::Rect2d &bbox : bboxes)
+            for (const cv::Rect2d& bbox : bboxes)
             {
                 std::cout << "BBOX :" << bbox.x << "," << bbox.y << "," << bbox.width << "," << bbox.height << std::endl;
             }
@@ -990,7 +990,7 @@ public:
             classes = queueYoloClassIndexRight.front(); // get current tracking status
             queueYoloClassIndexRight.pop();
             std::cout << ":: class label :: ";
-            for (const int &classIndex : classes)
+            for (const int& classIndex : classes)
             {
                 std::cout << classIndex << " ";
             }
@@ -1013,7 +1013,7 @@ void yoloDetect()
      *   queueYoloBbox : detected template bbox
      */
 
-    // YoloDetector initialization
+     // YoloDetector initialization
     YOLODetect yolodetectorLeft, yolodetectorRight;
     std::cout << "yolo initialization has finished" << std::endl;
     /* initialization */
@@ -1130,7 +1130,7 @@ void yoloDetect()
     checkClassStorage(classSaverYoloRight);
 }
 
-bool getImagesFromQueueYolo(std::array<cv::Mat1b, 2> &imgs, int &frameIndex)
+bool getImagesFromQueueYolo(std::array<cv::Mat1b, 2>& imgs, int& frameIndex)
 {
     // std::unique_lock<std::mutex> lock(mtxImg); // Lock the mutex
     if (!queueFrame.empty())
@@ -1145,7 +1145,7 @@ bool getImagesFromQueueYolo(std::array<cv::Mat1b, 2> &imgs, int &frameIndex)
     return false;
 }
 
-void checkStorage(std::vector<std::vector<cv::Rect2d>> &posSaverYolo)
+void checkStorage(std::vector<std::vector<cv::Rect2d>>& posSaverYolo)
 {
     int count = 1;
     std::cout << "posSaverYolo :: Contensts ::" << std::endl;
@@ -1159,7 +1159,7 @@ void checkStorage(std::vector<std::vector<cv::Rect2d>> &posSaverYolo)
     }
 }
 
-void checkClassStorage(std::vector<std::vector<int>> &classSaverYolo)
+void checkClassStorage(std::vector<std::vector<int>>& classSaverYolo)
 {
     int count = 1;
     std::cout << "Class saver :: Contensts ::" << std::endl;
@@ -1181,7 +1181,7 @@ void templateMatching() // void*
      * return most similar region
      */
 
-    // vector for saving position
+     // vector for saving position
     std::vector<std::vector<cv::Rect2d>> posSaverTMLeft;
     posSaverTMLeft.reserve(2000);
     std::vector<std::vector<int>> classSaverTMLeft;
@@ -1199,7 +1199,7 @@ void templateMatching() // void*
     int startCounter = 0; // after yolo detection has succeeded second times -> start template matching
     if (queueYoloBboxLeft.empty() && queueYoloBboxRight.empty())
     {
-        std::cout << "- Template Matching idling - " << std::endl;
+        std::cout << "- Template Matching idling -" << std::endl;
         /* get rid of imgs until yolo inference started */
         while (queueYoloBboxLeft.empty() && queueYoloBboxRight.empty())
         {
@@ -1280,7 +1280,7 @@ void templateMatching() // void*
     }
 }
 
-bool getImagesFromQueueTM(std::array<cv::Mat1b, 2> &imgs, int &frameIndex)
+bool getImagesFromQueueTM(std::array<cv::Mat1b, 2>& imgs, int& frameIndex)
 {
     // std::unique_lock<std::mutex> lock(mtxImg); // Lock the mutex
     if (queueFrame.empty() || queueFrameIndex.empty())
@@ -1299,7 +1299,7 @@ bool getImagesFromQueueTM(std::array<cv::Mat1b, 2> &imgs, int &frameIndex)
 /*  Template Matching Function  */
 
 /* Template Matching :: Left */
-void templateMatchingForLeft(cv::Mat1b &img, const int frameIndex, std::vector<cv::Mat1b> &templateImgs, std::vector<std::vector<cv::Rect2d>> &posSaver, std::vector<std::vector<int>> &classSaver)
+void templateMatchingForLeft(cv::Mat1b& img, const int frameIndex, std::vector<cv::Mat1b>& templateImgs, std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver)
 {
     // for updating templates
     std::vector<cv::Rect2d> updatedBboxes;
@@ -1344,7 +1344,7 @@ void templateMatchingForLeft(cv::Mat1b &img, const int frameIndex, std::vector<c
         getYoloDataLeft(templatesYoloLeft, bboxesYoloLeft, classIndexesYoloLeft); // get new frame
         // combine Yolo and TM data, and update latest data
         combineYoloTMData(classIndexesYoloLeft, classIndexTMLeft, templatesYoloLeft, templatesTM, bboxesYoloLeft, bboxesTM,
-                          updatedTemplates, updatedBboxes, updatedClasses, boolScalesTM, numTrackersTM);
+            updatedTemplates, updatedBboxes, updatedClasses, boolScalesTM, numTrackersTM);
     }
     /* template from yolo isn't available but TM tracker exist */
     else if (boolTrackerTM)
@@ -1426,7 +1426,7 @@ void templateMatchingForLeft(cv::Mat1b &img, const int frameIndex, std::vector<c
 /*
  * Template Matching :: Right camera
  */
-void templateMatchingForRight(cv::Mat1b &img, const int frameIndex, std::vector<cv::Mat1b> &templateImgs, std::vector<std::vector<cv::Rect2d>> &posSaver, std::vector<std::vector<int>> &classSaver)
+void templateMatchingForRight(cv::Mat1b& img, const int frameIndex, std::vector<cv::Mat1b>& templateImgs, std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver)
 {
     // for updating templates
     std::vector<cv::Rect2d> updatedBboxes;
@@ -1468,7 +1468,7 @@ void templateMatchingForRight(cv::Mat1b &img, const int frameIndex, std::vector<
         }
         // combine Yolo and TM data, and update latest data
         combineYoloTMData(classIndexesYoloRight, classIndexTMRight, templatesYoloRight, templatesTM, bboxesYoloRight, bboxesTM,
-                          updatedTemplates, updatedBboxes, updatedClasses, boolScalesTM, numTrackersTM);
+            updatedTemplates, updatedBboxes, updatedClasses, boolScalesTM, numTrackersTM);
     }
     /* template from yolo isn't available but TM tracker exist */
     else if (boolTrackerTM)
@@ -1543,7 +1543,7 @@ void templateMatchingForRight(cv::Mat1b &img, const int frameIndex, std::vector<
     }
 }
 
-void getTemplateMatchingDataLeft(bool &boolTrackerTM, std::vector<int> &classIndexTMLeft, std::vector<cv::Rect2d> &bboxesTM, std::vector<cv::Mat1b> &templatesTM, std::vector<bool> &boolScalesTM, int &numTrackersTM)
+void getTemplateMatchingDataLeft(bool& boolTrackerTM, std::vector<int>& classIndexTMLeft, std::vector<cv::Rect2d>& bboxesTM, std::vector<cv::Mat1b>& templatesTM, std::vector<bool>& boolScalesTM, int& numTrackersTM)
 {
     if (!queueTMClassIndexLeft.empty())
     {
@@ -1570,7 +1570,7 @@ void getTemplateMatchingDataLeft(bool &boolTrackerTM, std::vector<int> &classInd
     }
 }
 
-void getTemplateMatchingDataRight(bool &boolTrackerTM, std::vector<int> &classIndexTMRight, std::vector<cv::Rect2d> &bboxesTM, std::vector<cv::Mat1b> &templatesTM, std::vector<bool> &boolScalesTM, int &numTrackersTM)
+void getTemplateMatchingDataRight(bool& boolTrackerTM, std::vector<int>& classIndexTMRight, std::vector<cv::Rect2d>& bboxesTM, std::vector<cv::Mat1b>& templatesTM, std::vector<bool>& boolScalesTM, int& numTrackersTM)
 {
     if (!queueTMClassIndexRight.empty())
     {
@@ -1596,7 +1596,7 @@ void getTemplateMatchingDataRight(bool &boolTrackerTM, std::vector<int> &classIn
     }
 }
 
-void getYoloDataLeft(std::vector<cv::Mat1b> &newTemplates, std::vector<cv::Rect2d> &newBboxes, std::vector<int> &newClassIndexes)
+void getYoloDataLeft(std::vector<cv::Mat1b>& newTemplates, std::vector<cv::Rect2d>& newBboxes, std::vector<int>& newClassIndexes)
 {
     std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
     newTemplates = queueYoloTemplateLeft.front();
@@ -1607,7 +1607,7 @@ void getYoloDataLeft(std::vector<cv::Mat1b> &newTemplates, std::vector<cv::Rect2
     // queueYoloClassIndexLeft.pop();
 }
 
-void getYoloDataRight(std::vector<cv::Mat1b> &newTemplates, std::vector<cv::Rect2d> &newBboxes, std::vector<int> &newClassIndexes)
+void getYoloDataRight(std::vector<cv::Mat1b>& newTemplates, std::vector<cv::Rect2d>& newBboxes, std::vector<int>& newClassIndexes)
 {
     std::unique_lock<std::mutex> lock(mtxYoloRight); // Lock the mutex
     newTemplates = queueYoloTemplateRight.front();
@@ -1618,9 +1618,9 @@ void getYoloDataRight(std::vector<cv::Mat1b> &newTemplates, std::vector<cv::Rect
     // queueYoloClassIndexRight.pop();
 }
 
-void combineYoloTMData(std::vector<int> &classIndexesYoloLeft, std::vector<int> &classIndexTMLeft, std::vector<cv::Mat1b> &templatesYoloLeft, std::vector<cv::Mat1b> &templatesTM,
-                       std::vector<cv::Rect2d> &bboxesYoloLeft, std::vector<cv::Rect2d> &bboxesTM, std::vector<cv::Mat1b> &updatedTemplates, std::vector<cv::Rect2d> &updatedBboxes,
-                       std::vector<int> &updatedClasses, std::vector<bool> &boolScalesTM, const int &numTrackersTM)
+void combineYoloTMData(std::vector<int>& classIndexesYoloLeft, std::vector<int>& classIndexTMLeft, std::vector<cv::Mat1b>& templatesYoloLeft, std::vector<cv::Mat1b>& templatesTM,
+    std::vector<cv::Rect2d>& bboxesYoloLeft, std::vector<cv::Rect2d>& bboxesTM, std::vector<cv::Mat1b>& updatedTemplates, std::vector<cv::Rect2d>& updatedBboxes,
+    std::vector<int>& updatedClasses, std::vector<bool>& boolScalesTM, const int& numTrackersTM)
 {
     int counterYolo = 0;
     int counterTM = 0;      // for counting TM adaptations
@@ -1725,8 +1725,8 @@ void combineYoloTMData(std::vector<int> &classIndexesYoloLeft, std::vector<int> 
     }
 }
 
-void processTM(std::vector<int> &updatedClasses, std::vector<cv::Mat1b> &updatedTemplates, std::vector<bool> &boolScalesTM, std::vector<cv::Rect2d> &updatedBboxes, cv::Mat1b &img,
-               std::vector<cv::Mat1b> &updatedTemplatesTM, std::vector<cv::Rect2d> &updatedBboxesTM, std::vector<int> &updatedClassesTM, std::vector<bool> &updatedSearchScales)
+void processTM(std::vector<int>& updatedClasses, std::vector<cv::Mat1b>& updatedTemplates, std::vector<bool>& boolScalesTM, std::vector<cv::Rect2d>& updatedBboxes, cv::Mat1b& img,
+    std::vector<cv::Mat1b>& updatedTemplatesTM, std::vector<cv::Rect2d>& updatedBboxesTM, std::vector<int>& updatedClassesTM, std::vector<bool>& updatedSearchScales)
 {
     int counterTracker = 0;
     // get bbox from queue for limiting search area
@@ -1743,7 +1743,7 @@ void processTM(std::vector<int> &updatedClasses, std::vector<cv::Mat1b> &updated
         /* template exist -> start template matching */
         if (classIndexTM != -1)
         {
-            const cv::Mat1b &templateImg = updatedTemplates[counterTracker]; // for saving memory, using reference data
+            const cv::Mat1b& templateImg = updatedTemplates[counterTracker]; // for saving memory, using reference data
             // std::cout<<"template img size:" << templateImg.rows << "," << templateImg.cols << std::endl;
             // search area setting
             std::cout << "scale of TM : " << boolScalesTM[counterTracker] << std::endl;
@@ -1851,7 +1851,7 @@ void processTM(std::vector<int> &updatedClasses, std::vector<cv::Mat1b> &updated
     }
 }
 
-void push2YoloDataLeft(std::vector<cv::Rect2d> &updatedBboxesTM, std::vector<int> &updatedClassesTM)
+void push2YoloDataLeft(std::vector<cv::Rect2d>& updatedBboxesTM, std::vector<int>& updatedClassesTM)
 {
     std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
     if (!queueYoloBboxLeft.empty())
@@ -1878,7 +1878,7 @@ void push2YoloDataLeft(std::vector<cv::Rect2d> &updatedBboxesTM, std::vector<int
     }
 }
 
-void push2YoloDataRight(std::vector<cv::Rect2d> &updatedBboxesTM, std::vector<int> &updatedClassesTM)
+void push2YoloDataRight(std::vector<cv::Rect2d>& updatedBboxesTM, std::vector<int>& updatedClassesTM)
 {
     std::unique_lock<std::mutex> lock(mtxYoloRight); // Lock the mutex
     if (!queueYoloBboxRight.empty())
@@ -1937,7 +1937,7 @@ void targetPredict()
     {
         std::cout << " Target Prediction idling" << std::endl;
         /* get rid of imgs until yolo inference started */
-        while (queueLabelUpdateLeft.empty() && queueLabelUpdataRight.empty())
+        while (queueLabelUpdateLeft.empty() && queueLabelUpdateRight.empty())
         {
             if (!queueLabelUpdateLeft.empty() || !queueLabelUpdateRight.empty())
             {
@@ -2012,7 +2012,7 @@ void targetPredict()
  *  get update information from queueTMLabelUpdate -> update label
  *  and when label becomes -1, delete all data of the label
  */
-void updateTrackingData(std::vector<std::vector<std::vector<int>>> &dataLeft, std::vector<std::vector<std::vector<int>>> &dataRight, std::vector<std::vector<int>> &classesLeft, std::vector<std::vector<int>> &classesRight)
+void updateTrackingData(std::vector<std::vector<std::vector<int>>>& dataLeft, std::vector<std::vector<std::vector<int>>>& dataRight, std::vector<std::vector<int>>& classesLeft, std::vector<std::vector<int>>& classesRight)
 {
     int frameIndex;
     std::vector<int> classesCurrentLeft, classesCurrentRight; // latest classes
@@ -2021,7 +2021,7 @@ void updateTrackingData(std::vector<std::vector<std::vector<int>>> &dataLeft, st
     bool boolUpdateLabelRight = false;
     /* get tracking data fromt TM */
     bool ret = getTargetData(frameIndex, classesCurrentLeft, classesCurrentRight,
-                             bboxesLeft, bboxesRight, boolUpdateLabelLeft, boolUpdatedLabelRight);
+        bboxesLeft, bboxesRight, boolUpdateLabelLeft, boolUpdateLabelRight);
     /* 2 imgs data available */
     if (ret)
     {
@@ -2054,8 +2054,8 @@ void updateTrackingData(std::vector<std::vector<std::vector<int>>> &dataLeft, st
         else
         {
             /* add new data */
-            dataLeft = {dataCurrentLeft};
-            classesLeft = {classesCurrentLeft};
+            dataLeft = { dataCurrentLeft };
+            classesLeft = { classesCurrentLeft };
         }
         /* past Right data exist */
         if (!dataRight.empty())
@@ -2072,8 +2072,8 @@ void updateTrackingData(std::vector<std::vector<std::vector<int>>> &dataLeft, st
         else
         {
             /* add new data */
-            dataRight = {dataCurrentRight};
-            classesRight = {classesCurrentRight};
+            dataRight = { dataCurrentRight };
+            classesRight = { classesCurrentRight };
         }
     }
     /* neither data is available */
@@ -2083,13 +2083,13 @@ void updateTrackingData(std::vector<std::vector<std::vector<int>>> &dataLeft, st
     }
 }
 
-bool getTargetData(int &frameIndex, std::vector<int> &classesLeft, std::vector<int> &classesRight, std::vector<cv::Rect2d> &bboxesLeft,
-                   std::vector<cv::Rect2d> &bboxesRight, bool &boolUpdateLabelLeft, bool &boolUpdateLabelRight)
+bool getTargetData(int& frameIndex, std::vector<int>& classesLeft, std::vector<int>& classesRight, std::vector<cv::Rect2d>& bboxesLeft,
+    std::vector<cv::Rect2d>& bboxesRight, bool& boolUpdateLabelLeft, bool& boolUpdateLabelRight)
 {
     std::unique_lock<std::mutex> lock(mtxTarget); // Lock the mutex
     /* both data is available*/
     bool ret = false;
-    if (!queueTargetFrameIndex.empty)
+    if (!queueTargetFrameIndex.empty())
     {
         frameIndex = queueTargetFrameIndex.front();
         queueTargetFrameIndex.pop();
@@ -2108,20 +2108,20 @@ bool getTargetData(int &frameIndex, std::vector<int> &classesLeft, std::vector<i
         bboxesRight = queueTargetBboxesRight.front();
         queueTargetClassIndexesRight.pop();
         queueTargetBboxesRight.pop();
-        ret = true
+        ret = true;
     }
     if (!queueLabelUpdateLeft.empty())
     {
-        boolLabelUpdateLeft = true;
+        boolUpdateLabelLeft = true;
     }
     if (!queueLabelUpdateRight.empty())
     {
-        booLabelUpdateRight = true;
+        boolUpdateLabelRight = true;
     }
     return ret;
 }
 
-void convertRoi2Center(std::vector<int> &classes, std::vector<cv::Rect2d> &bboxes, const int &frameIndex, std::vector<std::vector<int>> &tempData)
+void convertRoi2Center(std::vector<int>& classes, std::vector<cv::Rect2d>& bboxes, const int& frameIndex, std::vector<std::vector<int>>& tempData)
 {
     int counterRoi = 0;
     for (const int classIndex : classes)
@@ -2131,7 +2131,7 @@ void convertRoi2Center(std::vector<int> &classes, std::vector<cv::Rect2d> &bboxe
         {
             int centerX = (int)(bboxes[counterRoi].x + bboxes[counterRoi].width / 2);
             int centerY = (int)(bboxes[counterRoi].y + bboxes[counterRoi].height / 2);
-            tempData.push_back({frameIndex, centerX, centerY});
+            tempData.push_back({ frameIndex, centerX, centerY });
             counterRoi++;
         }
         /* bbox isn't available */
@@ -2142,9 +2142,9 @@ void convertRoi2Center(std::vector<int> &classes, std::vector<cv::Rect2d> &bboxe
     }
 }
 
-void adjustData(std::vector<std::vector<int>> &classes, std::vector<std::vector<std::vector<int>>> &data,
-                std::vector<std::vector<int>> &dataCurrent, std::vector<int> &classesCurrent,
-                std::vector<int> &updatedClasses, bool &boolUpdateLabel)
+void adjustData(std::vector<std::vector<int>>& classes, std::vector<std::vector<std::vector<int>>>& data,
+    std::vector<std::vector<int>>& dataCurrent, std::vector<int>& classesCurrent,
+    std::vector<int>& updatedClasses, bool& boolUpdateLabel)
 {
     int counterPastClass = 0;                      // for counting past data
     int counterPastTracker = 0;                    // for counting past class
@@ -2158,7 +2158,7 @@ void adjustData(std::vector<std::vector<int>> &classes, std::vector<std::vector<
         for (const int classIndexCurrent : classesCurrent)
         {
             /* within already classes */
-            if (numPastClass > counterPastClass)
+            if (counterPastClass<numPastClass)
             {
                 /* new position data found-> add sequence data */
                 if (classIndexCurrent != -1)
@@ -2192,7 +2192,7 @@ void adjustData(std::vector<std::vector<int>> &classes, std::vector<std::vector<
                     else
                     {
                         updatedClasses.push_back(-1);
-                        couterPastClass++:
+                        counterPastClass++;
                     }
                 }
             }
@@ -2200,9 +2200,9 @@ void adjustData(std::vector<std::vector<int>> &classes, std::vector<std::vector<
             else
             {
                 /* new tracker */
-                if (classIndex != -1)
+                if (classIndexCurrent != -1)
                 {
-                    data.push_back({dataCurrent[counterCurrentTracker]});
+                    data.push_back({ dataCurrent[counterCurrentTracker] });
                     updatedClasses.push_back(classIndexCurrent); // add new class
                     counterCurrentTracker++;
                 }
@@ -2235,7 +2235,7 @@ void adjustData(std::vector<std::vector<int>> &classes, std::vector<std::vector<
                 /* label is different. but this is awkward because if label is -1 template matching didn't start */
                 else
                 {
-                    std::cout << "class label :: current class " << classIndex << " and past class : " << classesPast[counterPastClass] << ". check previous code. this is exception" << std::endl;
+                    std::cout << "class label :: current class " << classIndexCurrent << " and past class : " << classesPast[counterPastClass] << ". check previous code. this is exception" << std::endl;
                     counterPastClass++;
                     counterPastTracker++;
                 }
@@ -2259,7 +2259,7 @@ void adjustData(std::vector<std::vector<int>> &classes, std::vector<std::vector<
     }
 }
 
-void getLatestData(std::vector<std::vector<std::vector<int>>> &data, std::vector<std::vector<int>> &dataLatest)
+void getLatestData(std::vector<std::vector<std::vector<int>>>& data, std::vector<std::vector<int>>& dataLatest)
 {
     for (int i = 0; i < data.size(); i++)
     {
@@ -2267,14 +2267,14 @@ void getLatestData(std::vector<std::vector<std::vector<int>>> &data, std::vector
     }
 }
 
-void getLatestClass(std::vector<std::vector<int>> &classes, std::vector<int> &classesLatest)
+void getLatestClass(std::vector<std::vector<int>>& classes, std::vector<int>& classesLatest)
 {
     /* get latest classes but exclude class -1 */
     classesLatest = classes.back();
     /* delete -1 index */
     classesLatest.erase(std::remove(classesLatest.begin(), classesLatest.end(), -1), classesLatest.end());
 }
-bool sortByCenterX(const std::vector<int> &a, const std::vector<int> &b)
+bool sortByCenterX(const std::vector<int>& a, const std::vector<int>& b)
 {
     /*
      * Sort in ascending order based on centerX
@@ -2282,7 +2282,7 @@ bool sortByCenterX(const std::vector<int> &a, const std::vector<int> &b)
     return a[1] < b[1];
 }
 
-void sortData(std::vector<std::vector<int>> &dataLatest, std::vector<int> &classesLatest)
+void sortData(std::vector<std::vector<int>>& dataLatest, std::vector<int>& classesLatest)
 {
     // Create an index array to remember the original order
     std::vector<size_t> index(dataLatest.size());
@@ -2292,7 +2292,7 @@ void sortData(std::vector<std::vector<int>> &dataLatest, std::vector<int> &class
     }
     // Sort data1 based on centerX values and apply the same order to data2
     std::sort(index.begin(), index.end(), [&](size_t a, size_t b)
-              { return dataLatest[a][1] < dataLatest[b][1]; });
+        { return dataLatest[a][1] < dataLatest[b][1]; });
 
     std::vector<std::vector<int>> sortedDataLatest(dataLatest.size());
     std::vector<int> sortedClassesLatest(classesLatest.size());
@@ -2307,7 +2307,7 @@ void sortData(std::vector<std::vector<int>> &dataLatest, std::vector<int> &class
     classesLatest = sortedClassesLatest;
 }
 
-void linearRegression(const std::vector<std::vector<int>> &data, std::vector<float> &result_x)
+void linearRegression(const std::vector<std::vector<int>>& data, std::vector<float>& result_x)
 {
     /*
      * linear regression
@@ -2345,12 +2345,12 @@ void linearRegression(const std::vector<std::vector<int>> &data, std::vector<flo
         slope_x = 0;
         intercept_x = 0;
     }
-    result_x = {slope_x, intercept_x};
+    result_x = { slope_x, intercept_x };
     std::cout << "\n\nX :: The best fit value of curve is : x = " << slope_x << " t + " << intercept_x << ".\n\n"
-              << std::endl;
+        << std::endl;
 }
 
-void linearRegressionZ(const std::vector<std::vector<int>> &data, std::vector<float> &result_z)
+void linearRegressionZ(const std::vector<std::vector<int>>& data, std::vector<float>& result_z)
 {
     /*
      * linear regression
@@ -2388,12 +2388,12 @@ void linearRegressionZ(const std::vector<std::vector<int>> &data, std::vector<fl
         slope_z = 0;
         intercept_z = 0;
     }
-    result_z = {slope_z, intercept_z};
+    result_z = { slope_z, intercept_z };
     std::cout << "\n\nZ :: The best fit value of curve is : z = " << slope_z << " t + " << intercept_z << ".\n\n"
-              << std::endl;
+        << std::endl;
 }
 
-void curveFitting(const std::vector<std::vector<int>> &data, std::vector<float> &result)
+void curveFitting(const std::vector<std::vector<int>>& data, std::vector<float>& result)
 {
     /*
      * curve fitting with parabora
@@ -2404,7 +2404,7 @@ void curveFitting(const std::vector<std::vector<int>> &data, std::vector<float> 
      *   result(std::vector<float>&) : vector for saving result
      */
 
-    // argments analysis
+     // argments analysis
     int length = data.size(); // length of data
 
     float time1, time2, time3;
@@ -2436,15 +2436,15 @@ void curveFitting(const std::vector<std::vector<int>> &data, std::vector<float> 
         e = coef31 * data[length - 3][2] + coef32 * data[length - 2][2] + coef33 * data[length - 1][2];
     }
 
-    result = {c, d, e};
+    result = { c, d, e };
 
     std::cout << "y = " << c << "x^2 + " << d << "x + " << e << std::endl;
 }
 
-void trajectoryPredict2D(std::vector<std::vector<std::vector<int>>> &dataLeft, std::vector<std::vector<float>> &coefficientsX, std::vector<std::vector<float>> &coefficientsY, std::vector<int> &classesLatest)
+void trajectoryPredict2D(std::vector<std::vector<std::vector<int>>>& dataLeft, std::vector<std::vector<float>>& coefficientsX, std::vector<std::vector<float>>& coefficientsY, std::vector<int>& classesLatest)
 {
     int counterData = 0;
-    for (const std::vector<std::vector<int>> &data : dataLeft)
+    for (const std::vector<std::vector<int>>& data : dataLeft)
     {
         /* get 3 and more time-step datas -> can predict trajectory */
         if (data.size() >= 3)
@@ -2458,7 +2458,7 @@ void trajectoryPredict2D(std::vector<std::vector<std::vector<int>>> &dataLeft, s
             /* Here data is latest to old -> but not have bad effect to trajectory prediction */
             for (auto it = rbegin; it != rend && std::distance(rend, it) < 3; ++it)
             {
-                const std::vector<int> &element = *it;
+                const std::vector<int>& element = *it;
                 tempData.push_back(element);
             }
             /* trajectory prediction in X and Y */
@@ -2472,8 +2472,8 @@ void trajectoryPredict2D(std::vector<std::vector<std::vector<int>>> &dataLeft, s
          */
         else
         {
-            coefficientsX.push_back({0.0, 0.0});
-            coefficientsY.push_back({0.0, 0.0, 0.0});
+            coefficientsX.push_back({ 0.0, 0.0 });
+            coefficientsY.push_back({ 0.0, 0.0, 0.0 });
             // classesLatest.erase(classesLatest.begin() + counterData); //erase class
             // counterData++;
             /* can't predict trajectory */
@@ -2481,7 +2481,7 @@ void trajectoryPredict2D(std::vector<std::vector<std::vector<int>>> &dataLeft, s
     }
 }
 
-float calculateME(std::vector<float> &coefXLeft, std::vector<float> &coefYLeft, std::vector<float> &coefXRight, std::vector<float> &coefYRight)
+float calculateME(std::vector<float>& coefXLeft, std::vector<float>& coefYLeft, std::vector<float>& coefXRight, std::vector<float>& coefYRight)
 {
     float me = 0.0; // mean error
     for (int i = 0; i < coefYLeft.size(); i++)
@@ -2492,11 +2492,11 @@ float calculateME(std::vector<float> &coefXLeft, std::vector<float> &coefYLeft, 
     return me;
 }
 
-void dataMatching(std::vector<std::vector<float>> &coefficientsXLeft, std::vector<std::vector<float>> &coefficientsXRight,
-                  std::vector<std::vector<float>> &coefficientsYLeft, std::vector<std::vector<float>> &coefficientsYRight,
-                  std::vector<int> &classesLatestLeft, std::vector<int> &classesLatestRight,
-                  std::vector<std::vector<std::vector<int>>> &dataLeft, std::vector<std::vector<std::vector<int>>> &dataRight,
-                  std::vector<std::vector<std::vector<std::vector<int>>>> &dataFor3D)
+void dataMatching(std::vector<std::vector<float>>& coefficientsXLeft, std::vector<std::vector<float>>& coefficientsXRight,
+    std::vector<std::vector<float>>& coefficientsYLeft, std::vector<std::vector<float>>& coefficientsYRight,
+    std::vector<int>& classesLatestLeft, std::vector<int>& classesLatestRight,
+    std::vector<std::vector<std::vector<int>>>& dataLeft, std::vector<std::vector<std::vector<int>>>& dataRight,
+    std::vector<std::vector<std::vector<std::vector<int>>>>& dataFor3D)
 {
     float minVal = 20;
     int minIndexRight;
@@ -2535,7 +2535,7 @@ void dataMatching(std::vector<std::vector<float>> &coefficientsXLeft, std::vecto
                 /* matcing object found */
                 if (minVal < 20)
                 {
-                    dataFor3D.push_back({dataLeft[i], dataRight[minIndexRight]}); // match objects and push_back to dataFor3D
+                    dataFor3D.push_back({ dataLeft[i], dataRight[minIndexRight] }); // match objects and push_back to dataFor3D
                 }
             }
             /* maybe fixed objects detected */
@@ -2547,7 +2547,7 @@ void dataMatching(std::vector<std::vector<float>> &coefficientsXLeft, std::vecto
     }
 }
 
-void predict3DTargets(std::vector<std::vector<std::vector<std::vector<int>>>> &datasFor3D, std::vector<std::vector<int>> &targets3D)
+void predict3DTargets(std::vector<std::vector<std::vector<std::vector<int>>>>& datasFor3D, std::vector<std::vector<int>>& targets3D)
 {
     int indexL, indexR, xLeft, xRight, yLeft, yRight;
     float fX = cameraMatrix.at<double>(0, 0);
@@ -2556,7 +2556,7 @@ void predict3DTargets(std::vector<std::vector<std::vector<std::vector<int>>>> &d
     float oX = cameraMatrix.at<double>(0, 2);
     float oY = cameraMatrix.at<double>(1, 2);
     /* iteration of calculating 3d position for each matched objects */
-    for (std::vector<std::vector<std::vector<int>>> &dataFor3D : datasFor3D)
+    for (std::vector<std::vector<std::vector<int>>>& dataFor3D : datasFor3D)
     {
         std::vector<std::vector<int>> dataL = dataFor3D[0];
         std::vector<std::vector<int>> dataR = dataFor3D[1];
@@ -2588,7 +2588,7 @@ void predict3DTargets(std::vector<std::vector<std::vector<std::vector<int>>>> &d
                 int X = (int)(BASELINE / disparity) * (xLeft - oX - (fSkew / fY) * (yLeft - oY));
                 int Y = (int)(BASELINE * (fX / fY) * (yLeft - oY) / disparity);
                 int Z = (int)(fX * BASELINE / disparity);
-                data3D.push_back({indexL, X, Y, Z});
+                data3D.push_back({ indexL, X, Y, Z });
                 counter++;
             }
         }
@@ -2605,7 +2605,7 @@ void predict3DTargets(std::vector<std::vector<std::vector<std::vector<int>>>> &d
                 int frameTarget = (int)((TARGET_DEPTH - coefZ[1]) / coefZ[0]);
                 int xTarget = (int)(coefX[0] * frameTarget + coefX[1]);
                 int yTarget = (int)(coefY[0] * frameTarget * frameTarget + coefY[1] * frameTarget + coefY[2]);
-                targets3D.push_back({frameTarget, xTarget, yTarget, TARGET_DEPTH}); // push_back target position
+                targets3D.push_back({ frameTarget, xTarget, yTarget, TARGET_DEPTH }); // push_back target position
                 std::cout << "target is : ( frameTarget :  " << frameTarget << ", xTarget : " << xTarget << ", yTarget : " << yTarget << ", depthTarget : " << TARGET_DEPTH << std::endl;
             }
         }
@@ -2613,7 +2613,7 @@ void predict3DTargets(std::vector<std::vector<std::vector<std::vector<int>>>> &d
 }
 
 /* read imgs */
-void pushFrame(std::array<cv::Mat1b, 2> &srcs, const int frameIndex)
+void pushFrame(std::array<cv::Mat1b, 2>& srcs, const int frameIndex)
 {
     std::unique_lock<std::mutex> lock(mtxImg); // Lock the mutex
     // std::cout << "push imgs" << std::endl;
@@ -2643,9 +2643,9 @@ int main()
     const std::string followerCamID = "30958851"; // �t�H�����J����
 
 #if SYNC_CAMERAS
-    std::array<Ximea, 2> cams = {Ximea(imgWidth, imgHeight, frameRate, leaderCamID, expTime, isBinning, false), Ximea(imgWidth, imgHeight, frameRate, followerCamID, expTime, isBinning, true)};
+    std::array<Ximea, 2> cams = { Ximea(imgWidth, imgHeight, frameRate, leaderCamID, expTime, isBinning, false), Ximea(imgWidth, imgHeight, frameRate, followerCamID, expTime, isBinning, true) };
 #else
-    std::array<Ximea, 2> cams = {Ximea(imgWidth, imgHeight, frameRate, leaderCamID, expTime, isBinning, 0), Ximea(imgWidth, imgHeight, frameRate, followerCamID, expTime, isBinning, 0)};
+    std::array<Ximea, 2> cams = { Ximea(imgWidth, imgHeight, frameRate, leaderCamID, expTime, isBinning, 0), Ximea(imgWidth, imgHeight, frameRate, followerCamID, expTime, isBinning, 0) };
 #endif // SYNC_CAMERAS
     // �Q�C���ݒ�
     cams[0].SetGain(imgGain);
@@ -2672,7 +2672,7 @@ int main()
         }
     }
     int saveCount = 0;
-    std::array<cv::Mat1b, 2> srcs = {cv::Mat1b::zeros(imgHeight, imgWidth), cv::Mat1b::zeros(imgHeight, imgWidth)}; // �擾�摜
+    std::array<cv::Mat1b, 2> srcs = { cv::Mat1b::zeros(imgHeight, imgWidth), cv::Mat1b::zeros(imgHeight, imgWidth) }; // �擾�摜
 
     // multi thread code
     std::thread threadYolo(yoloDetect);
@@ -2720,7 +2720,7 @@ int main()
     if (saveCount > 0)
     {
         time_t now = time(nullptr);
-        const tm *lt = localtime(&now);
+        const tm* lt = localtime(&now);
         // "�N����-���ԕ��b"�Ƃ����f�B���N�g��������
         const std::string dirName_left = std::to_string(lt->tm_year + 1900) + std::to_string(lt->tm_mon + 1) + std::to_string(lt->tm_mday) + "-" + std::to_string(lt->tm_hour) + std::to_string(lt->tm_min) + std::to_string(lt->tm_sec) + "-left-calibration";
         const std::string dirName_right = std::to_string(lt->tm_year + 1900) + std::to_string(lt->tm_mon + 1) + std::to_string(lt->tm_mday) + "-" + std::to_string(lt->tm_hour) + std::to_string(lt->tm_min) + std::to_string(lt->tm_sec) + "-right-calibration";
