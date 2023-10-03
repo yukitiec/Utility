@@ -5,6 +5,7 @@
 #include <queue>
 #include <mutex>
 #include <chrono>
+#include <fstream>
 
 /* constant valude definition */
 const std::string filename = "video/yolotest.mp4";
@@ -12,7 +13,7 @@ const bool save = true;
 bool boolSparse = false;
 bool boolGray = true;
 std::string methodDenseOpticalFlow = "farneback"; //"lucasKanade_dense","rlof"
-const float qualityCorner = 0.2;
+const float qualityCorner = 0.1;
 /* roi setting */
 const int roiWidth = 32;
 const int roiHeight = 32;
@@ -34,12 +35,11 @@ std::queue<std::vector<std::vector<std::vector<cv::Point2f>>>> queueOFFeatures; 
 void yolo();
 void getImages(cv::Mat1b&, int&);
 void sparseOpticalFlow();
-void getPreviousData(std::vector<std::vector<cv::Mat1b>>&
-    
-    , std::vector<std::vector<cv::Rect2d>>&,std::vector<std::vector<std::vector<cv::Point2f>>>&);
+void getPreviousData(std::vector<std::vector<cv::Mat1b>>&, std::vector<std::vector<cv::Rect2d>>&,std::vector<std::vector<std::vector<cv::Point2f>>>&);
+void getYoloData(std::vector<std::vector<cv::Mat1b>>&, std::vector<std::vector<cv::Rect2d>>&);
 void opticalFlow(const cv::Mat1b&, const int&, cv::Mat1b&, cv::Rect2d&, std::vector<cv::Point2f>&,cv::Mat1b&, cv::Rect2d&, std::vector<cv::Point2f>&, std::vector<int>&);
 
-void pushImg(cv::Mat1b, int);
+void pushImg(cv::Mat1b&, int&);
 
 /*  YOLO class definition  */
 class YOLOPose
@@ -386,6 +386,7 @@ public:
                 queueYoloOldImgSearch.push(imgHuman);
             }
             posSaver.push_back(humanJointsCenter);
+            std::cout << "push Yolo detection data to queue" << std::endl;
         }
     }
 };
@@ -440,6 +441,13 @@ void yolo()
             }
         }
     }
+    //prepare file
+    std::string filePath = "jointsPositionYolo1.csv";
+    // Open the file for writing
+    std::ofstream outputFile(filePath);
+    if (!outputFile.is_open()) {
+        std::cerr << "Error: Could not open the file." << std::endl;
+    }
     /* write posSaver data to csv file */
     std::cout << "estimated position :: YOLO :: " << std::endl;
     /*sequence*/
@@ -454,9 +462,21 @@ void yolo()
             for (int k = 0; k < posSaver[i][j].size(); k++)
             {
                 std::cout << k << "-th joint :: frameIndex=" << posSaver[i][j][k][0] << ", xCenter=" << posSaver[i][j][k][1] << ", yCenter=" << posSaver[i][j][k][2] << std::endl;
+                outputFile << posSaver[i][j][k][0];
+                outputFile << ",";
+                outputFile << posSaver[i][j][k][1];
+                outputFile << ",";
+                outputFile << posSaver[i][j][k][2];
+                if (k != posSaver[i][j].size() - 1)
+                {
+                    outputFile << ",";
+                }
             }
+            outputFile << "\n";
         }
     }
+    // Close the file
+    outputFile.close();
 }
 
 void getImages(cv::Mat1b& frame, int& frameIndex)
@@ -473,269 +493,314 @@ void sparseOpticalFlow()
 {
     /* prepare storage */
     std::vector<std::vector<std::vector<std::vector<int>>>> posSaver; //[sequence,numHuman,numJoints,position] :{frameIndex,xCenter,yCenter}
-    if (queueYoloOldImgSearch.empty())
+
+    int counterStart = 0;
+    while (true)
     {
-        int counterStart = 0;
-        while (queueYoloOldImgSearch.empty())
+        if (counterStart == 2)
         {
-            if (counterStart == 3)
+            break;
+        }
+        if (!queueYoloOldImgSearch.empty())
+        {
+            counterStart++;
+            int countIteration = 1;
+            while (!queueYoloOldImgSearch.empty())
             {
-                break;
+                std::cout <<countIteration<< " :: remove yolo data" << std::endl;
+                countIteration++;
+                queueYoloOldImgSearch.pop();
             }
-            if (!queueYoloOldImgSearch.empty())
+            while (!queueYoloSearchRoi.empty())
             {
-                counterStart++;
-                while (!queueYoloOldImgSearch.empty())
-                {
-                    queueYoloOldImgSearch.pop();
-                }
-                while (!queueYoloSearchRoi.empty())
-                {
-                    queueYoloSearchRoi.pop();
-                }
+                queueYoloSearchRoi.pop();
             }
-            cv::Mat1b frame;
-            int frameIndex;
-            getImages(frame, frameIndex);
-            std::this_thread::sleep_for(std::chrono::milliseconds(30));
+        }
+        cv::Mat1b frame;
+        int frameIndex;
+        if (!queueFrame.empty())
+        {
+            //getImages(frame, frameIndex);
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
             std::cout << "wait for yolo detection" << std::endl;
         }
     }
     /* frame is available */
-    else
+    int counter = 1;
+    int counterFinish = 0;
+    while (true)
     {
-        int counter = 1;
-        int counterFinish = 0;
-        while (true)
+        if (counterFinish == 10)
         {
-            if (counterFinish == 10)
+            break;
+        }
+        if (queueFrame.empty())
+        {
+            counterFinish++;
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        /* frame available */
+        else
+        {
+            std::cout << "start optical flow tracking" << std::endl;
+            /* get images from queue */
+            cv::Mat1b frame;
+            int frameIndex;
+            auto start = std::chrono::high_resolution_clock::now();
+            getImages(frame, frameIndex);
+            /* optical flow process for each joints */
+            std::vector<std::vector<cv::Mat1b>> previousImg; //[number of human,0~6,cv::Mat1b]
+            std::vector<std::vector<cv::Rect2d>> searchRoi; //[number of human,6,cv::Rect2d], if tracker was failed, roi.x == -1
+            std::vector<std::vector<std::vector<cv::Point2f>>> previousFeatures;//[number of human,0~6,num of features,cv::Point2f]
+            getPreviousData(previousImg, searchRoi, previousFeatures);
+            std::cout << "finish getting previous data " << std::endl;
+            /* start optical flow process */
+            /* for every human */
+            std::vector<std::vector<cv::Mat1b>> updatedImgHuman;
+            std::vector<std::vector<cv::Rect2d>> updatedSearchRoiHuman;
+            std::vector<std::vector<std::vector<cv::Point2f>>> updatedFeaturesHuman;
+            std::vector<std::vector<std::vector<int>>> updatedPositionsHuman;
+            for (int i = 0; i < searchRoi.size(); i++)
             {
-                break;
-            }
-            if (queueFrame.empty())
-            {
-                counterFinish++;
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            }
-            /* frame available */
-            else
-            {
-                /* get images from queue */
-                cv::Mat1b frame;
-                int frameIndex;
-                getImages(frame, frameIndex);
-                /* optical flow process for each joints */
-                std::vector<std::vector<cv::Mat1b>> previousImg; //[number of human,0~6,cv::Mat1b]
-                std::vector<std::vector<cv::Rect2d>> searchRoi; //[number of human,6,cv::Rect2d], if tracker was failed, roi.x == -1
-                std::vector<std::vector<std::vector<cv::Point2f>>> previousFeatures;//[number of human,0~6,num of features,cv::Point2f]
-                getPreviousData(previousImg, searchRoi, previousFeatures);
-                /* start optical flow process */
-                /* for every human */
-                std::vector<std::vector<cv::Mat1b>> updatedImgHuman;
-                std::vector<std::vector<cv::Rect2d>> updatedSearchRoiHuman;
-                std::vector<std::vector<std::vector<cv::Point2f>>> updatedFeaturesHuman;
-                std::vector<std::vector<std::vector<int>>> updatedPositionsHuman;
-                for (int i = 0; i < searchRoi.size(); i++)
+
+                /* for every joints */
+                std::vector<cv::Mat1b> updatedImgJoints;
+                std::vector<cv::Rect2d> updatedSearchRoi;
+                std::vector<std::vector<cv::Point2f>> updatedFeatures;
+                std::vector<std::vector<int>> updatedPositions;
+                std::vector<int> updatedPosLeftShoulder, updatedPosRightShoulder, updatedPosLeftElbow, updatedPosRightElbow, updatedPosLeftWrist, updatedPosRightWrist;
+                cv::Mat1b updatedImgLeftShoulder, updatedImgRightShoulder, updatedImgLeftElbow, updatedImgRightElbow, updatedImgLeftWrist, updatedImgRightWrist;
+                cv::Rect2d updatedSearchRoiLeftShoulder, updatedSearchRoiRightShoulder, updatedSearchRoiLeftElbow, updatedSearchRoiRightElbow, updatedSearchRoiLeftWrist, updatedSearchRoiRightWrist;
+                std::vector<cv::Point2f> updatedFeaturesLeftShoulder, updatedFeaturesRightShoulder, updatedFeaturesLeftElbow, updatedFeaturesRightElbow, updatedFeaturesLeftWrist, updatedFeaturesRightWrist;
+                bool boolLeftShoulder = false;
+                bool boolRightShoulder = false;
+                bool boolLeftElbow = false;
+                bool boolRightElbow = false;
+                bool boolLeftWrist = false;
+                bool boolRightWrist = false;
+                std::vector<std::thread> threadJoints;
+                /* start optical flow process for each joints */
+                /* left shoulder */
+                int counterTracker = 0;
+                if (searchRoi[i][0].x != -1)
                 {
-                    /* for every joints */
-                    std::vector<cv::Mat1b> updatedImgJoints;
-                    std::vector<cv::Rect2d> updatedSearchRoi;
-                    std::vector<std::vector<cv::Point2f>> updatedFeatures;
-                    std::vector<std::vector<int>> updatedPositions;
-                    std::vector<int> updatedPosLeftShoulder, updatedPosRightShoulder, updatedPosLeftElbow, updatedPosRightElbow, updatedPosLeftWrist, updatedPosRightWrist;
-                    cv::Mat1b updatedImgLeftShoulder, updatedImgRightShoulder, updatedImgLeftElbow, updatedImgRightElbow, updatedImgLeftWrist, updatedImgRightWrist;
-                    cv::Rect2d updatedSearchRoiLeftShoulder, updatedSearchRoiRightShoulder, updatedSearchRoiLeftElbow, updatedSearchRoiRightElbow, updatedSearchRoiLeftWrist, updatedSearchRoiRightWrist;
-                    std::vector<cv::Point2f> updatedFeaturesLeftShoulder, updatedFeaturesRightShoulder, updatedFeaturesLeftElbow, updatedFeaturesRightElbow, updatedFeaturesLeftWrist, updatedFeaturesRightWrist;
-                    bool boolLeftShoulder = false;
-                    bool boolRightShoulder = false;
-                    bool boolLeftElbow = false;
-                    bool boolRightElbow = false;
-                    bool boolLeftWrist = false;
-                    bool boolRightWrist = false;
-                    std::vector<std::thread> threadJoints;
-                    /* start optical flow process for each joints */
-                    /* left shoulder */
-                    int counterTracker = 0;
-                    if (searchRoi[i][0].x != -1)
-                    {
-                        threadJoints.emplace_back(opticalFlow,std::ref(frame), std::ref(frameIndex), std::ref(previousImg[i][counterTracker]), std::ref(searchRoi[i][0]), std::ref(previousFeatures[i][counterTracker]),
-                            std::ref(updatedImgLeftShoulder), std::ref(updatedSearchRoiLeftShoulder), std::ref(updatedFeaturesLeftShoulder), std::ref(updatedPosLeftShoulder));
-                        boolLeftShoulder = true;
-                        counterTracker++;
-                    }
-                    else
-                    {
-                        updatedSearchRoiLeftShoulder.x = -1;
-                        updatedSearchRoiLeftShoulder.y = -1;
-                        updatedSearchRoiLeftShoulder.width = -1;
-                        updatedSearchRoiLeftShoulder.height = -1;
-                    }
-                    /* right shoulder */
-                    if (searchRoi[i][1].x != -1)
-                    {
-                        threadJoints.emplace_back(opticalFlow, std::ref(frame), std::ref(frameIndex), std::ref(previousImg[i][counterTracker]), std::ref(searchRoi[i][1]), std::ref(previousFeatures[i][counterTracker]),
-                            std::ref(updatedImgRightShoulder), std::ref(updatedSearchRoiRightShoulder), std::ref(updatedFeaturesRightShoulder), std::ref(updatedPosRightShoulder));
-                        boolRightShoulder = true;
-                        counterTracker++;
-                    }
-                    else
-                    {
-                        updatedSearchRoiRightShoulder.x = -1;
-                        updatedSearchRoiRightShoulder.y = -1;
-                        updatedSearchRoiRightShoulder.width = -1;
-                        updatedSearchRoiRightShoulder.height = -1;
-                    }
-                    /* left elbow */
-                    if (searchRoi[i][2].x != -1)
-                    {
-                        threadJoints.emplace_back(opticalFlow, std::ref(frame), std::ref(frameIndex), std::ref(previousImg[i][counterTracker]), std::ref(searchRoi[i][2]), std::ref(previousFeatures[i][counterTracker]),
-                            std::ref(updatedImgLeftElbow), std::ref(updatedSearchRoiLeftElbow), std::ref(updatedFeaturesLeftElbow), std::ref(updatedPosLeftElbow));
-                        boolLeftElbow = true;
-                        counterTracker++;
-                    }
-                    else
-                    {
-                        updatedSearchRoiLeftElbow.x = -1;
-                        updatedSearchRoiLeftElbow.y = -1;
-                        updatedSearchRoiLeftElbow.width = -1;
-                        updatedSearchRoiLeftElbow.height = -1;
-                    }
-                    /* right elbow */
-                    if (searchRoi[i][3].x != -1)
-                    {
-                        threadJoints.emplace_back(opticalFlow, std::ref(frame), std::ref(frameIndex), std::ref(previousImg[i][counterTracker]), std::ref(searchRoi[i][3]), std::ref(previousFeatures[i][counterTracker]),
-                            std::ref(updatedImgRightElbow), std::ref(updatedSearchRoiRightElbow), std::ref(updatedFeaturesRightElbow), std::ref(updatedPosRightElbow));
-                        boolRightElbow = true;
-                        counterTracker++;
-                    }
-                    else
-                    {
-                        updatedSearchRoiRightElbow.x = -1;
-                        updatedSearchRoiRightElbow.y = -1;
-                        updatedSearchRoiRightElbow.width = -1;
-                        updatedSearchRoiRightElbow.height = -1;
-                    }
-                    /* left wrist */
-                    if (searchRoi[i][4].x != -1)
-                    {
-                        threadJoints.emplace_back(opticalFlow, std::ref(frame), std::ref(frameIndex), std::ref(previousImg[i][counterTracker]), std::ref(searchRoi[i][4]), std::ref(previousFeatures[i][counterTracker]),
-                            std::ref(updatedImgLeftWrist), std::ref(updatedSearchRoiLeftWrist), std::ref(updatedFeaturesLeftWrist), std::ref(updatedPosLeftWrist));
-                        boolLeftWrist = true;
-                        counterTracker++;
-                    }
-                    else
-                    {
-                        updatedSearchRoiLeftWrist.x = -1;
-                        updatedSearchRoiLeftWrist.y = -1;
-                        updatedSearchRoiLeftWrist.width = -1;
-                        updatedSearchRoiLeftWrist.height = -1;
-                    }
-                    /* right wrist */
-                    if (searchRoi[i][5].x != -1)
-                    {
-                        threadJoints.emplace_back(opticalFlow, std::ref(frame), std::ref(frameIndex), std::ref(previousImg[i][counterTracker]), std::ref(searchRoi[i][5]), std::ref(previousFeatures[i][counterTracker]),
-                            std::ref(updatedImgRightWrist), std::ref(updatedSearchRoiRightWrist), std::ref(updatedFeaturesRightWrist), std::ref(updatedPosRightWrist));
-                        boolRightWrist = true;
-                        counterTracker++;
-                    }
-                    else
-                    {
-                        updatedSearchRoiRightWrist.x = -1;
-                        updatedSearchRoiRightWrist.y = -1;
-                        updatedSearchRoiRightWrist.width = -1;
-                        updatedSearchRoiRightWrist.height = -1;
-                    }
-                    /* wait for all thread has finished */
+                    threadJoints.emplace_back(opticalFlow,std::ref(frame), std::ref(frameIndex), std::ref(previousImg[i][counterTracker]), std::ref(searchRoi[i][0]), std::ref(previousFeatures[i][counterTracker]),
+                        std::ref(updatedImgLeftShoulder), std::ref(updatedSearchRoiLeftShoulder), std::ref(updatedFeaturesLeftShoulder), std::ref(updatedPosLeftShoulder));
+                    boolLeftShoulder = true;
+                    counterTracker++;
+                }
+                else
+                {
+                    updatedSearchRoiLeftShoulder.x = -1;
+                    updatedSearchRoiLeftShoulder.y = -1;
+                    updatedSearchRoiLeftShoulder.width = -1;
+                    updatedSearchRoiLeftShoulder.height = -1;
+                    updatedPosLeftShoulder = std::vector<int>{ frameIndex, -1, -1 };
+                }
+                /* right shoulder */
+                if (searchRoi[i][1].x != -1)
+                {
+                    threadJoints.emplace_back(opticalFlow, std::ref(frame), std::ref(frameIndex), std::ref(previousImg[i][counterTracker]), std::ref(searchRoi[i][1]), std::ref(previousFeatures[i][counterTracker]),
+                        std::ref(updatedImgRightShoulder), std::ref(updatedSearchRoiRightShoulder), std::ref(updatedFeaturesRightShoulder), std::ref(updatedPosRightShoulder));
+                    boolRightShoulder = true;
+                    counterTracker++;
+                }
+                else
+                {
+                    updatedSearchRoiRightShoulder.x = -1;
+                    updatedSearchRoiRightShoulder.y = -1;
+                    updatedSearchRoiRightShoulder.width = -1;
+                    updatedSearchRoiRightShoulder.height = -1;
+                    updatedPosRightShoulder = std::vector<int>{ frameIndex, -1, -1 };
+                }
+                /* left elbow */
+                if (searchRoi[i][2].x != -1)
+                {
+                    threadJoints.emplace_back(opticalFlow, std::ref(frame), std::ref(frameIndex), std::ref(previousImg[i][counterTracker]), std::ref(searchRoi[i][2]), std::ref(previousFeatures[i][counterTracker]),
+                        std::ref(updatedImgLeftElbow), std::ref(updatedSearchRoiLeftElbow), std::ref(updatedFeaturesLeftElbow), std::ref(updatedPosLeftElbow));
+                    boolLeftElbow = true;
+                    counterTracker++;
+                }
+                else
+                {
+                    updatedSearchRoiLeftElbow.x = -1;
+                    updatedSearchRoiLeftElbow.y = -1;
+                    updatedSearchRoiLeftElbow.width = -1;
+                    updatedSearchRoiLeftElbow.height = -1;
+                    updatedPosLeftElbow = std::vector<int>{ frameIndex, -1, -1 };
+                }
+                /* right elbow */
+                if (searchRoi[i][3].x != -1)
+                {
+                    threadJoints.emplace_back(opticalFlow, std::ref(frame), std::ref(frameIndex), std::ref(previousImg[i][counterTracker]), std::ref(searchRoi[i][3]), std::ref(previousFeatures[i][counterTracker]),
+                        std::ref(updatedImgRightElbow), std::ref(updatedSearchRoiRightElbow), std::ref(updatedFeaturesRightElbow), std::ref(updatedPosRightElbow));
+                    boolRightElbow = true;
+                    counterTracker++;
+                }
+                else
+                {
+                    updatedSearchRoiRightElbow.x = -1;
+                    updatedSearchRoiRightElbow.y = -1;
+                    updatedSearchRoiRightElbow.width = -1;
+                    updatedSearchRoiRightElbow.height = -1;
+                    updatedPosRightElbow = std::vector<int>{ frameIndex, -1, -1 };
+                }
+                /* left wrist */
+                if (searchRoi[i][4].x != -1)
+                {
+                    threadJoints.emplace_back(opticalFlow, std::ref(frame), std::ref(frameIndex), std::ref(previousImg[i][counterTracker]), std::ref(searchRoi[i][4]), std::ref(previousFeatures[i][counterTracker]),
+                        std::ref(updatedImgLeftWrist), std::ref(updatedSearchRoiLeftWrist), std::ref(updatedFeaturesLeftWrist), std::ref(updatedPosLeftWrist));
+                    boolLeftWrist = true;
+                    counterTracker++;
+                }
+                else
+                {
+                    updatedSearchRoiLeftWrist.x = -1;
+                    updatedSearchRoiLeftWrist.y = -1;
+                    updatedSearchRoiLeftWrist.width = -1;
+                    updatedSearchRoiLeftWrist.height = -1;
+                    updatedPosLeftWrist = std::vector<int>{ frameIndex, -1, -1 };
+                }
+                /* right wrist */
+                if (searchRoi[i][5].x != -1)
+                {
+                    threadJoints.emplace_back(opticalFlow, std::ref(frame), std::ref(frameIndex), std::ref(previousImg[i][counterTracker]), std::ref(searchRoi[i][5]), std::ref(previousFeatures[i][counterTracker]),
+                        std::ref(updatedImgRightWrist), std::ref(updatedSearchRoiRightWrist), std::ref(updatedFeaturesRightWrist), std::ref(updatedPosRightWrist));
+                    boolRightWrist = true;
+                    counterTracker++;
+                }
+                else
+                {
+                    updatedSearchRoiRightWrist.x = -1;
+                    updatedSearchRoiRightWrist.y = -1;
+                    updatedSearchRoiRightWrist.width = -1;
+                    updatedSearchRoiRightWrist.height = -1;
+                    updatedPosRightWrist = std::vector<int>{ frameIndex, -1, -1 };
+                }
+                std::cout << "all threads have started" << std::endl;
+                /* wait for all thread has finished */
+                int counterThread = 0;
+                if (!threadJoints.empty())
+                {
                     for (std::thread& thread : threadJoints) {
                         thread.join();
+                        counterThread++;
                     }
-                    /* combine all data and push data to queue */
-                    /* search roi */
-                    updatedSearchRoi.push_back(updatedSearchRoiLeftShoulder);
-                    updatedSearchRoi.push_back(updatedSearchRoiRightShoulder);
-                    updatedSearchRoi.push_back(updatedSearchRoiLeftElbow);
-                    updatedSearchRoi.push_back(updatedSearchRoiRightElbow);
-                    updatedSearchRoi.push_back(updatedSearchRoiLeftWrist);
-                    updatedSearchRoi.push_back(updatedSearchRoiRightWrist);
-                    /* updated img */
-                    /* left shoulder*/
-                    if (updatedSearchRoi[0].x != -1)
-                    {
-                        updatedImgJoints.push_back(updatedImgLeftShoulder);
-                        updatedFeatures.push_back(updatedFeaturesLeftShoulder);
-                        updatedPositions.push_back(updatedPosLeftShoulder);
-                    }
-                    /* right shoulder*/
-                    if (updatedSearchRoi[1].x != -1)
-                    {
-                        updatedImgJoints.push_back(updatedImgRightShoulder);
-                        updatedFeatures.push_back(updatedFeaturesRightShoulder);
-                        updatedPositions.push_back(updatedPosRightShoulder);
-                    }
-                    /*left elbow*/
-                    if (updatedSearchRoi[2].x != -1)
-                    {
-                        updatedImgJoints.push_back(updatedImgLeftElbow);
-                        updatedFeatures.push_back(updatedFeaturesLeftElbow);
-                        updatedPositions.push_back(updatedPosLeftElbow);
-                    }
-                    /*right elbow */
-                    if (updatedSearchRoi[3].x != -1)
-                    {
-                        updatedImgJoints.push_back(updatedImgRightElbow);
-                        updatedFeatures.push_back(updatedFeaturesRightElbow);
-                        updatedPositions.push_back(updatedPosRightElbow);
-                    }
-                    /* left wrist*/
-                    if (updatedSearchRoi[4].x != -1)
-                    {
-                        updatedImgJoints.push_back(updatedImgLeftWrist);
-                        updatedFeatures.push_back(updatedFeaturesLeftWrist);
-                        updatedPositions.push_back(updatedPosLeftWrist);
-                    }
-                    /*right wrist*/
-                    if (updatedSearchRoi[5].x != -1)
-                    {
-                        updatedImgJoints.push_back(updatedImgRightWrist);
-                        updatedFeatures.push_back(updatedFeaturesRightWrist);
-                        updatedPositions.push_back(updatedPosRightWrist);
-                    }
-                    /* combine all data for one human */
-                    updatedSearchRoiHuman.push_back(updatedSearchRoi);
-                    if (!updatedImgJoints.empty())
-                    {
-                        updatedImgHuman.push_back(updatedImgJoints);
-                        updatedFeaturesHuman.push_back(updatedFeatures);
-                        updatedPositionsHuman.push_back(updatedPositions);
-                    }
+                    std::cout << counterThread << " threads have started!" << std::endl;
                 }
-                /* push updated data to queue */
-                queueOFSearchRoi.push(updatedSearchRoiHuman);
-                if (!updatedPositionsHuman.empty())
+                else
                 {
-                    queueOFOldImgSearch.push(updatedImgHuman);
-                    queueOFFeatures.push(updatedFeaturesHuman);
-                    posSaver.push_back(updatedPositionsHuman);
+                    std::cout << "no thread has started" << std::endl;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+                }
+                /* combine all data and push data to queue */
+                /* search roi */
+                updatedSearchRoi.push_back(updatedSearchRoiLeftShoulder);
+                updatedSearchRoi.push_back(updatedSearchRoiRightShoulder);
+                updatedSearchRoi.push_back(updatedSearchRoiLeftElbow);
+                updatedSearchRoi.push_back(updatedSearchRoiRightElbow);
+                updatedSearchRoi.push_back(updatedSearchRoiLeftWrist);
+                updatedSearchRoi.push_back(updatedSearchRoiRightWrist);
+                updatedPositions.push_back(updatedPosLeftShoulder);
+                updatedPositions.push_back(updatedPosRightShoulder);
+                updatedPositions.push_back(updatedPosLeftElbow);
+                updatedPositions.push_back(updatedPosRightElbow);
+                updatedPositions.push_back(updatedPosLeftWrist);
+                updatedPositions.push_back(updatedPosRightWrist);
+                /* updated img */
+                /* left shoulder*/
+                if (updatedSearchRoi[0].x != -1)
+                {
+                    updatedImgJoints.push_back(updatedImgLeftShoulder);
+                    updatedFeatures.push_back(updatedFeaturesLeftShoulder);
+                }
+                /* right shoulder*/
+                if (updatedSearchRoi[1].x != -1)
+                {
+                    updatedImgJoints.push_back(updatedImgRightShoulder);
+                    updatedFeatures.push_back(updatedFeaturesRightShoulder);
+                }
+                /*left elbow*/
+                if (updatedSearchRoi[2].x != -1)
+                {
+                    updatedImgJoints.push_back(updatedImgLeftElbow);
+                    updatedFeatures.push_back(updatedFeaturesLeftElbow);
+                }
+                /*right elbow */
+                if (updatedSearchRoi[3].x != -1)
+                {
+                    updatedImgJoints.push_back(updatedImgRightElbow);
+                    updatedFeatures.push_back(updatedFeaturesRightElbow);
+                }
+                /* left wrist*/
+                if (updatedSearchRoi[4].x != -1)
+                {
+                    updatedImgJoints.push_back(updatedImgLeftWrist);
+                    updatedFeatures.push_back(updatedFeaturesLeftWrist);
+                }
+                /*right wrist*/
+                if (updatedSearchRoi[5].x != -1)
+                {
+                    updatedImgJoints.push_back(updatedImgRightWrist);
+                    updatedFeatures.push_back(updatedFeaturesRightWrist);
+                }
+                /* combine all data for one human */
+                updatedSearchRoiHuman.push_back(updatedSearchRoi);
+                updatedPositionsHuman.push_back(updatedPositions);
+                if (!updatedImgJoints.empty())
+                {
+                    updatedImgHuman.push_back(updatedImgJoints);
+                    updatedFeaturesHuman.push_back(updatedFeatures);
                 }
             }
-        }
-        std::cout << "estimated position :: Optical Flow :: " << std::endl;
-        /*sequence*/
-        for (int i = 0; i < posSaver.size(); i++)
-        {
-            std::cout << i << "-th sequence data ::: " << std::endl;
-            /*num of humans*/
-            for (int j = 0; j < posSaver[i].size(); j++)
+            /* push updated data to queue */
+            queueOFSearchRoi.push(updatedSearchRoiHuman);
+            posSaver.push_back(updatedPositionsHuman);
+            if (!updatedImgHuman.empty())
             {
-                std::cout << j << "-th human detection:::" << std::endl;
-                /*num of joints*/
-                for (int k = 0; k < posSaver[i][j].size(); k++)
-                {
-                    std::cout << k << "-th joint :: frameIndex=" << posSaver[i][j][k][0] << ", xCenter=" << posSaver[i][j][k][1] << ", yCenter=" << posSaver[i][j][k][2] << std::endl;
-                }
+                queueOFOldImgSearch.push(updatedImgHuman);
+                queueOFFeatures.push(updatedFeaturesHuman);
             }
+            auto stop = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+            std::cout << " Time taken by OpticalFlow : " << duration.count() << " milliseconds" << std::endl;
         }
     }
+    //prepare file
+    std::string filePathOF = "jointsPositionOpticalFlow1.csv";
+    // Open the file for writing
+    std::ofstream outputFile(filePathOF);
+    if (!outputFile.is_open()) {
+        std::cerr << "Error: Could not open the file." << std::endl;
+    }
+    std::cout << "estimated position :: Optical Flow :: " << std::endl;
+    /*sequence*/
+    for (int i = 0; i < posSaver.size(); i++)
+    {
+        std::cout << i << "-th sequence data ::: " << std::endl;
+        /*num of humans*/
+        for (int j = 0; j < posSaver[i].size(); j++)
+        {
+            std::cout << j << "-th human detection:::" << std::endl;
+            /*num of joints*/
+            for (int k = 0; k < posSaver[i][j].size(); k++)
+            {
+                std::cout << k << "-th joint :: frameIndex=" << posSaver[i][j][k][0] << ", xCenter=" << posSaver[i][j][k][1] << ", yCenter=" << posSaver[i][j][k][2] << std::endl;
+                outputFile << posSaver[i][j][k][0];
+                outputFile << ",";
+                outputFile << posSaver[i][j][k][1];
+                outputFile << ",";
+                outputFile << posSaver[i][j][k][2];
+                if (k != posSaver[i][j].size() - 1)
+                {
+                    outputFile << ",";
+                }
+            }
+            outputFile << "\n";
+        }
+    }
+    // close file
+    outputFile.close();
 }
 
 void getPreviousData(std::vector<std::vector<cv::Mat1b>>& previousImg, std::vector<std::vector<cv::Rect2d>>& searchRoi,
@@ -767,67 +832,129 @@ void getPreviousData(std::vector<std::vector<cv::Mat1b>>& previousImg, std::vect
     std::vector<std::vector<cv::Rect2d>> searchYoloRoi;
     if (!queueYoloOldImgSearch.empty())
     {
+        std::cout << "yolo data is available" << std::endl;
         getYoloData(previousYoloImg, searchYoloRoi);
         /* update data here */
-        /* OF tracking has started */
-        if (!searchRoi.empty())
+        /* iterate for all human detection */
+        std::cout << "searchYoloRoi size : " << searchYoloRoi.size() << std::endl;
+        //std::cout << "searchRoi by optical flow size : " << searchRoi.size() << ","<<searchRoi[0].size()<<std::endl;
+        //std::cout << "successful trackers of optical flow : " << previousImg.size() << std::endl;
+        for (int i = 0; i < searchYoloRoi.size(); i++)
         {
-            /* iterate for all human detection */
-            for (int i = 0; i < searchRoi.size(); i++)
+            std::cout << i << "-th human" << std::endl;
+            /* some OF tracking were successful */
+            if (!previousImg.empty())
             {
-                /* for all joints */
-                int counterJoint = 0;
-                int counterYoloImg = 0;
-                for (const cv::Rect2d& roi : searchRoi[i])
+                /* existed human detection */
+                if (i < previousImg.size())
                 {
-                    /* tracking is failed -> updated data with yolo data */
-                    if (roi.x == -1)
+                    std::cout << "previousImg : num of human : " << previousImg.size() << std::endl;
+                    /* for all joints */
+                    int counterJoint = 0;
+                    int counterYoloImg = 0;
+                    int counterTrackerOF = 0; //number of successful trackers by Optical Flow
+                    for (const cv::Rect2d& roi : searchRoi[i])
                     {
-                        /* yolo detect joints -> update of data */
-                        if (searchYoloRoi[i][counterJoint].x != -1)
+                        std::cout << "update data with Yolo detection : " << counterJoint << "-th joint" << std::endl;
+                        /* tracking is failed -> update data with yolo data */
+                        if (roi.x == -1)
                         {
-                            searchRoi[i].insert(searchRoi[i].begin() + counterJoint, searchYoloRoi[i][counterJoint]);
-                            previousImg[i].insert(previousImg[i].begin() + counterJoint, previousYoloImg[i][counterYoloImg]);
+                            /* yolo detect joints -> update data */
+                            if (searchYoloRoi[i][counterJoint].x != -1)
+                            {
+                                std::cout << "update OF tracker features with yolo detection" << std::endl;
+                                searchRoi[i].insert(searchRoi[i].begin() + counterJoint, searchYoloRoi[i][counterJoint]);
+                                previousImg[i].insert(previousImg[i].begin() + counterTrackerOF, previousYoloImg[i][counterYoloImg]);
+                                /* calculate features? */
+                                std::vector<cv::Point2f> p0;
+                                /* shi-tomashi method. if not good -> try */
+                                /* Shi-tomashi corner method */
+                                cv::goodFeaturesToTrack(previousYoloImg[i][counterYoloImg], p0, 20, qualityCorner, 3, cv::Mat(), 5, false, 0.04);
+                                /* Harris Corner detection */
+                                //cv::goodFeaturesToTrack(previousYoloImg[i][counterYoloImg], p0, 20, qualityCorner, 5, cv::Mat(), 5, true);
+                                /* FAST corner detection */
+                                /*
+                                int thresholdFast = 100;
+                                bool boolnonMax = true;
+                                std::vector<cv::KeyPoint> keypoints;
+                                cv::Fast(previousYoloImg[i][counterYoloImg],thresholdFast,boolNonMax);
+                                */
+                                previousFeatures[i].insert(previousFeatures[i].begin() + counterTrackerOF, p0);
+                                counterJoint++;
+                                counterYoloImg++;
+                                counterTrackerOF++;
+                            }
+                            /* yolo can't detect joint -> not updated data */
+                            else
+                            {
+                                std::cout << "Yolo didn't detect joint" << std::endl;
+                                counterJoint++;
+                            }
+
+                        }
+                        /* tracking is successful */
+                        else
+                        {
+                            std::cout << "tracking was successful" << std::endl;
+                            /* not update features */
+                            if (searchYoloRoi[i][counterJoint].x != -1)
+                            {
+                                counterYoloImg++;
+                            }
+                            counterJoint++;
+                            counterTrackerOF++;
+                            std::cout << "update iterator" << std::endl;
+                        }
+                    }
+                }
+                /* new human detecte3d */
+                else
+                {
+                    std::cout << "new human was detected by Yolo " << std::endl;
+                    int counterJoint = 0;
+                    int counterYoloImg = 0;
+                    std::vector<cv::Rect2d> joints;
+                    std::vector<cv::Mat1b> imgJoints;
+                    std::vector<std::vector<cv::Point2f>> features;
+                    /* for every joints */
+                    for (const cv::Rect2d& roi : searchYoloRoi[i])
+                    {
+                        /* keypoint is found */
+                        if (roi.x != -1)
+                        {
+                            joints.push_back(roi);
+                            imgJoints.push_back(previousYoloImg[i][counterYoloImg]);
                             /* calculate features? */
                             std::vector<cv::Point2f> p0;
-                            /* shi-tomashi method. if not good -> try */
                             /* Shi-tomashi corner method */
                             cv::goodFeaturesToTrack(previousYoloImg[i][counterYoloImg], p0, 20, qualityCorner, 5, cv::Mat(), 5, false, 0.04);
                             /* Harris Corner detection */
                             //cv::goodFeaturesToTrack(previousYoloImg[i][counterYoloImg], p0, 20, qualityCorner, 5, cv::Mat(), 5, true);
-                            /* FAST corner detection */
-                            /*
-                            int thresholdFast = 100;
-                            bool boolnonMax = true;
-                            std::vector<cv::KeyPoint> keypoints;
-                            cv::Fast(previousYoloImg[i][counterYoloImg],thresholdFast,boolNonMax);
-                            */
-                            previousFeatures[i].insert(previousFeatures[i].begin() + counterJoint, p0);
+                            features.push_back(p0);
                             counterJoint++;
                             counterYoloImg++;
                         }
-                        /* yolo can't detect joint -> not updated data */
+                        /* keypoints not found */
                         else
                         {
+                            joints.push_back(roi);
                             counterJoint++;
                         }
-
                     }
-                    /* tracking is successful */
-                    else
+                    searchRoi.push_back(joints);
+                    if (!imgJoints.empty())
                     {
-                        /* not update features */
-                        counterJoint++;
+                        previousImg.push_back(imgJoints);
+                        previousFeatures.push_back(features);
                     }
                 }
+                
             }
-        }
-        /* first yolo detection */
-        else
-        {
-            /* for every human */
-            for (int i = 0; i < searchYoloRoi.size(); i++)
+            /* no OF tracking was successful or first yolo detection */
+            else
             {
+                searchRoi = std::vector<std::vector<cv::Rect2d>>(); //initialize searchRoi for avoiding data
+                std::cout << "Optical Flow :: failed or first Yolo detection " << std::endl;
                 int counterJoint = 0;
                 int counterYoloImg = 0;
                 std::vector<cv::Rect2d> joints;
@@ -858,7 +985,7 @@ void getPreviousData(std::vector<std::vector<cv::Mat1b>>& previousImg, std::vect
                         counterJoint++;
                     }
                 }
-                searchRoi.push_back( joints );
+                searchRoi.push_back(joints);
                 if (!imgJoints.empty())
                 {
                     previousImg.push_back(imgJoints);
@@ -941,9 +1068,9 @@ void opticalFlow(const cv::Mat1b& frame, const int& frameIndex, cv::Mat1b& previ
     }
 }
 
-void pushImg(cv::Mat1b frame, int frameIndex)
+void pushImg(cv::Mat1b& frame, int& frameIndex)
 {
-    std::unique_lock<std::mutex> lock(mtxImg);
+    //std::unique_lock<std::mutex> lock(mtxImg);
     queueFrame.push(frame);
     queueFrameIndex.push(frameIndex);
 }
@@ -961,7 +1088,7 @@ int main()
     yoloPoseEstimator.detect(imgGray,counter);
     */
     /* video inference */
-    const std::string filename = "video/yolotest.mp4";
+    const std::string filename = "yolotest.mp4";
     cv::VideoCapture capture(filename);
     if (!capture.isOpened())
     {
@@ -981,9 +1108,11 @@ int main()
         counter++;
         if (frame.empty())
             break;
+        cv::Mat1b frameGray;
+        cv::cvtColor(frame,frameGray, cv::COLOR_RGB2GRAY);
         //cv::Mat1b frameGray;
         // cv::cvtColor(frame, frameGray, cv::COLOR_BGR2GRAY);
-        pushImg(frame, counter);
+        pushImg(frameGray, counter);
     }
     threadYolo.join();
     threadOF.join();
