@@ -93,11 +93,11 @@ bool getImagesFromQueueTM(cv::Mat1b&, int&);
 /* template matching */
 void templateMatching();                                                                                                                                  // void* //proto definition
 void templateMatchingForLeft(cv::Mat1b&, const int, std::vector<cv::Mat1b>&, std::vector<std::vector<cv::Rect2d>>&, std::vector<std::vector<int>>&);  //, int, int, float, const int);
+void organizeData(std::vector<bool>&, bool, std::vector<int>&, std::vector<cv::Mat1b>&,std::vector<cv::Rect2d>&, std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&, std::vector<int>&, int&);
 void combineYoloTMData(std::vector<int>&, std::vector<int>&, std::vector<cv::Mat1b>&, std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&,
     std::vector<cv::Rect2d>&, std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&, std::vector<int>&, std::vector<bool>&, const int&);
 void getTemplateMatchingDataLeft(bool&, std::vector<int>&, std::vector<cv::Rect2d>&, std::vector<cv::Mat1b>&, std::vector<bool>&, int&);
-void processTM(std::vector<int>&, std::vector<cv::Mat1b>&, std::vector<bool>&, std::vector<cv::Rect2d>&, cv::Mat1b&,
-    std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&, std::vector<int>&, std::vector<bool>&);
+void processTM(std::vector<int>&, std::vector<cv::Mat1b>&, std::vector<bool>&, std::vector<cv::Rect2d>&, cv::Mat1b&,std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&, std::vector<int>&, std::vector<bool>&);
 /* access yolo data */
 void getYoloDataLeft(std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&, std::vector<int>&);
 //void push2YoloDataLeft(std::vector<cv::Rect2d>&, std::vector<int>&);
@@ -192,16 +192,8 @@ public:
         /* get latest data from Template Matching */
         if (!queueYoloClassIndexLeft.empty())
         {
-            if (!queueTMClassIndexLeft.empty())
-            {
-                std::cout << "Yolo detection : get latest data from Template matching!" << std::endl;
-                getTMDataLeft(bboxesCandidateTMLeft, classIndexesTMLeft);
-            }
-            else
-            {
-                std::cout << "Yolo detection : get latest data from Yolo!" << std::endl;
-                getYoloDataLeft(bboxesCandidateTMLeft, classIndexesTMLeft); // get latest data
-            }
+            std::cout << "Yolo detection : get latest data!" << std::endl;
+            getYoloDataLeft(bboxesCandidateTMLeft, classIndexesTMLeft); // get latest data
         }
         /* postProcess */
         // std::cout << "post process" << std::endl;
@@ -646,10 +638,25 @@ public:
                         /* not found matched tracker -> return classIndex -1 to updatedClassIndexes */
                         else
                         {
-                            std::cout << "TM and Yolo Tracker didn't match" << std::endl;
-                            existedClass.push_back(-1);
+                            /* class label is 0 */
+                            if (candidateIndex == 0)
+                            {
+                                std::cout << "TM and Yolo Tracker didn't match" << std::endl;
+                                existedClass.push_back(-1);
+                            }
+                            /* class label is other than 0 */
+                            else
+                            {
+                                std::cout << "TM and Yolo Tracker didn't match" << std::endl;
+                                existedClass.at(counterIteration) = -1;
+                            }
+                            
                         }
-                        bboxesCandidate.erase(bboxesCandidate.begin() + counterCandidateTM); // delete TM latest roi to maintain roi order
+                        /* delete candidate bbox */
+                        if (!bboxesCandidate.empty())
+                        {
+                            bboxesCandidate.erase(bboxesCandidate.begin() + counterCandidateTM); // delete TM latest roi to maintain roi order
+                        }
                     }
                     /* other labels -> push back same label to maintain order only when candidateIndex=0 */
                     else if (candidateIndex != classIndex && candidateIndex == 0)
@@ -658,7 +665,7 @@ public:
                         counterCandidateTM++; // for maintain order of existed roi
                     }
                     /* only valid if classIndex != 0 */
-                    else if (candidateIndex < classIndex && classIndex != 0)
+                    else if (candidateIndex < classIndex && candidateIndex != 0)
                     {
                         counterCandidateTM++; // for maintaining order of existed roi
                     }
@@ -679,33 +686,45 @@ public:
             /* bboxes Yolo already disappear -> previous trackers was failed here */
             else
             {
-                /* if same label -> failed to track in YOLO  */
-                if (classIndex == candidateIndex && candidateIndex == 0)
+                /* candidate index == 0 */
+                if (candidateIndex == 0)
                 {
-                    existedClass.push_back(-1);
-                    if (!bboxesCandidate.empty())
+                    /* if same label -> failed to track in YOLO  */
+                    if (classIndex == candidateIndex)
                     {
-                        bboxesCandidate.erase(bboxesCandidate.begin() + counterCandidateTM); // delete TM latest roi to maintain roi order
+                        existedClass.push_back(-1);
+                        if (!bboxesCandidate.empty())
+                        {
+                            bboxesCandidate.erase(bboxesCandidate.begin() + counterCandidateTM); // delete TM latest roi to maintain roi order
+                        }
+                    }
+                    /* class label is 1,2,3,... */
+                    else if (classIndex > candidateIndex)
+                    {
+                        existedClass.push_back(classIndex);
+                        counterCandidateTM++; // maintain existedROI order
+                    }
+                    /* else classIndex != candidateIndex */
+                    else if (classIndex == -1)
+                    {
+                        existedClass.push_back(-1);
                     }
                 }
-                else if (classIndex == candidateIndex && candidateIndex != 0)
+                /* class label is other than 0 */
+                else
                 {
-                    existedClass.at(counterIteration) = -1;                                  // update label as -1
-                    if (!bboxesCandidate.empty())
+                    if (classIndex == candidateIndex)
                     {
-                        bboxesCandidate.erase(bboxesCandidate.begin() + counterCandidateTM); // delete TM latest roi to maintain roi order
+                        existedClass.at(counterIteration) = -1;                                  // update label as -1
+                        if (!bboxesCandidate.empty())
+                        {
+                            bboxesCandidate.erase(bboxesCandidate.begin() + counterCandidateTM); // delete TM latest roi to maintain roi order
+                        }
                     }
-                }
-                /* else classIndex != candidateIndex */
-                else if (classIndex != -1 && candidateIndex == 0)
-                {
-                    existedClass.push_back(classIndex);
-                    counterCandidateTM++; // maintain existedROI order
-                }
-                /* else classIndex != candidateIndex */
-                else if (classIndex == -1 && candidateIndex == 0)
-                {
-                    existedClass.push_back(-1);
+                    else if (candidateIndex < classIndex)
+                    {
+                        counterCandidateTM++; // for maintaining order of existed roi
+                    }
                 }
             }
             counterIteration++;
@@ -736,7 +755,21 @@ public:
             classSaver.push_back(updatedClassIndexes);
 
             // push detected data
-            //std::unique_lock<std::mutex> lock(mtxYoloLeft);
+            std::unique_lock<std::mutex> lock(mtxYoloLeft);
+            /*initialize queue*/
+            while (!queueYoloClassIndexLeft.empty())
+            {
+                queueYoloClassIndexLeft.pop();
+            }
+            while (!queueYoloBboxLeft.empty())
+            {
+                queueYoloBboxLeft.pop();
+            }
+            while (!queueYoloTemplateLeft.empty())
+            {
+                queueYoloTemplateLeft.pop();
+            }
+            /* finish initialization */
             queueYoloBboxLeft.push(updatedRoi);
             queueYoloTemplateLeft.push(updatedTemplates);
             queueYoloClassIndexLeft.push(updatedClassIndexes);
@@ -746,7 +779,12 @@ public:
         {
             if (!updatedClassIndexes.empty())
             {
-                //std::unique_lock<std::mutex> lock(mtxYoloLeft);
+                std::unique_lock<std::mutex> lock(mtxYoloLeft);
+                /*initialize queue*/
+                while (!queueYoloClassIndexLeft.empty())
+                {
+                    queueYoloClassIndexLeft.pop();
+                }
                 queueYoloClassIndexLeft.push(updatedClassIndexes);
             }
             /* no class Indexes -> nothing to do */
@@ -868,28 +906,10 @@ public:
             }
             std::cout << std::endl;
         }
-    }
-
-    void getTMDataLeft(std::vector<cv::Rect2d>& bboxes, std::vector<int>& classes)
-    {
-        if (!queueTMBboxLeft.empty())
+        /* get rid of template images */
+        while (!queueYoloTemplateLeft.empty())
         {
-            bboxes = queueTMBboxLeft.front();
-        }
-        std::cout << ":: Left :: latest TM data " << std::endl;
-        for (const cv::Rect2d& bbox : bboxes)
-        {
-            std::cout << "BBOX ::" << bbox.x << "," << bbox.y << "," << bbox.width << "," << bbox.height << std::endl;
-        }
-        if (!queueTMClassIndexLeft.empty())
-        {
-            classes = queueTMClassIndexLeft.front();
-            std::cout << "::class label :: ";
-            for (const int& classIndex : classes)
-            {
-                std::cout << classIndex << " ";
-            }
-            std::cout << std::endl;
+            queueYoloTemplateLeft.pop();
         }
     }
 };
@@ -1040,7 +1060,7 @@ void templateMatching() // void*
     std::vector<std::vector<cv::Rect2d>> posSaverTMLeft;
     posSaverTMLeft.reserve(2000);
     std::vector<std::vector<int>> classSaverTMLeft;
-    classSaverTMLeft.reserve(300);
+    classSaverTMLeft.reserve(2000);
 
     int countIteration = 0;
     int counterFinish = 0;
@@ -1055,7 +1075,7 @@ void templateMatching() // void*
         if (!queueYoloBboxLeft.empty())
         {
             /* YOLO detection has succeede! */
-            if (startCounter == 3)
+            if (startCounter == 2)
             {
                 break;
             }
@@ -1070,22 +1090,25 @@ void templateMatching() // void*
             startCounter++;
             std::cout << "start counter = " << startCounter << std::endl;
         }
-        // get img from queue
-        /*
-        if (!queueFrame.empty())
+        else
         {
-            // std::cout << "get images from queue" << std::endl;
-            cv::Mat1b img;
-            int frameIndex;
-            getImagesFromQueueTM(img, frameIndex);
+            // get img from queue
+            /*
+            if (!queueFrame.empty())
+            {
+                // std::cout << "get images from queue" << std::endl;
+                cv::Mat1b img;
+                int frameIndex;
+                getImagesFromQueueTM(img, frameIndex);
+            }
+            */
+            //else
+            //{
+            //}
+            // std::cout << "wait for YOLO inference " << std::endl;
+            std::cout << "wait for Yolo detection" << std::endl;
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));//static_cast<int>(1000 / FPS)));
         }
-        */
-        //else
-        //{
-        std::cout << "wait for Yolo detection" << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));//static_cast<int>(1000 / FPS)));
-        //}
-        // std::cout << "wait for YOLO inference " << std::endl;
     }
     std::cout << "start template matching" << std::endl;
     while (true) // continue until finish
@@ -1129,8 +1152,7 @@ void templateMatching() // void*
     checkStorage(posSaverTMLeft);
     std::cout << "Class saver : TM : " << std::endl;
     std::cout << " : Left : " << std::endl;
-    checkClassStorage(classSaverTMLeft);
-    
+    checkClassStorage(classSaverTMLeft); 
 }
 
 bool getImagesFromQueueTM(cv::Mat1b& img, int& frameIndex)
@@ -1182,22 +1204,8 @@ void templateMatchingForLeft(cv::Mat1b& img, const int frameIndex, std::vector<c
     /* Yolo Template is availble */
     if (!queueYoloTemplateLeft.empty())
     {
-        boolTrackerYolo = true;
-        if (!boolScalesTM.empty())
-        {
-            boolScalesTM.clear(); // clear all elements of scales
-        }
-        // get Yolo data
-        std::vector<cv::Mat1b> templatesYoloLeft;
-        templatesYoloLeft.reserve(100); // get new data
-        std::vector<cv::Rect2d> bboxesYoloLeft;
-        bboxesYoloLeft.reserve(100); // get current frame data
-        std::vector<int> classIndexesYoloLeft;
-        classIndexesYoloLeft.reserve(300);
-        getYoloDataLeft(templatesYoloLeft, bboxesYoloLeft, classIndexesYoloLeft); // get new frame
-        // combine Yolo and TM data, and update latest data
-        combineYoloTMData(classIndexesYoloLeft, classIndexTMLeft, templatesYoloLeft, templatesTM, bboxesYoloLeft, bboxesTM,
-            updatedTemplates, updatedBboxes, updatedClasses, boolScalesTM, numTrackersTM);
+        /* get Yolo data and update Template matchin data */
+        organizeData(boolScalesTM, boolTrackerYolo, classIndexTMLeft, templatesTM, bboxesTM, updatedTemplates, updatedBboxes, updatedClasses, numTrackersTM);
     }
     /* template from yolo isn't available but TM tracker exist */
     else if (boolTrackerTM)
@@ -1230,21 +1238,6 @@ void templateMatchingForLeft(cv::Mat1b& img, const int frameIndex, std::vector<c
         std::cout << "processTM start" << std::endl;
         processTM(updatedClasses, updatedTemplates, boolScalesTM, updatedBboxes, img, updatedTemplatesTM, updatedBboxesTM, updatedClassesTM, updatedSearchScales);
         std::cout << "processTM finish" << std::endl;
-
-        if (!updatedBboxesTM.empty())
-        {
-            queueTMBboxLeft.push(updatedBboxesTM); // push roi
-            posSaver.push_back(updatedBboxes);     // save current position to the vector
-        }
-        if (!updatedTemplatesTM.empty())
-        {
-            queueTMTemplateLeft.push(updatedTemplatesTM); // push template image
-        }
-        if (!updatedClassesTM.empty())
-        {
-            queueTMClassIndexLeft.push(updatedClassesTM);
-            classSaver.push_back(updatedClassesTM); // save current class to the saver
-        }
         if (!updatedSearchScales.empty())
         {
             queueTMScalesLeft.push(updatedSearchScales);
@@ -1254,6 +1247,55 @@ void templateMatchingForLeft(cv::Mat1b& img, const int frameIndex, std::vector<c
         {
             queueLabelUpdateLeft.push(true);
         }
+        std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
+        /* Yolo update data -> don't push new data of TM*/
+        if (!queueYoloTemplateLeft.empty())
+        {
+            if (!updatedBboxesTM.empty())
+            {
+                queueTMBboxLeft.push(updatedBboxesTM); // push roi
+                posSaver.push_back(updatedBboxes);     // save current position to the vector
+            }
+            if (!updatedTemplatesTM.empty())
+            {
+                queueTMTemplateLeft.push(updatedTemplatesTM); // push template image
+            }
+            if (!updatedClassesTM.empty())
+            {
+                queueTMClassIndexLeft.push(updatedClassesTM);
+                classSaver.push_back(updatedClassesTM); // save current class to the saver
+            }
+        }
+        else
+        {
+            std::cout << "queueYoloTemplate is empty" << std::endl;
+            /* initialize queue of Yolo */
+            while (!queueYoloBboxLeft.empty())
+            {
+                queueYoloBboxLeft.pop();
+            }
+            while (!queueYoloClassIndexLeft.empty())
+            {
+                queueYoloClassIndexLeft.pop();
+            }
+            /* finish initialize */
+            if (!updatedBboxesTM.empty())
+            {
+                queueTMBboxLeft.push(updatedBboxesTM); // push roi
+                posSaver.push_back(updatedBboxes);     // save current position to the vector
+                queueYoloBboxLeft.push(updatedBboxesTM);
+            }
+            if (!updatedTemplatesTM.empty())
+            {
+                queueTMTemplateLeft.push(updatedTemplatesTM); // push template image
+            }
+            if (!updatedClassesTM.empty())
+            {
+                queueTMClassIndexLeft.push(updatedClassesTM);
+                classSaver.push_back(updatedClassesTM); // save current class to the saver
+                queueYoloClassIndexLeft.push(updatedClassesTM);
+            }
+        }
     }
     else // no template or bbox -> nothing to do
     {
@@ -1261,9 +1303,30 @@ void templateMatchingForLeft(cv::Mat1b& img, const int frameIndex, std::vector<c
         {
             queueTMClassIndexLeft.push(classIndexTMLeft);
             classSaver.push_back(classIndexTMLeft); // save current class to the saver
+            /* Yolo update data -> don't push new data of TM*/
+            if (!queueYoloTemplateLeft.empty())
+            {
+                /* go through */
+            }
+            else
+            {
+                std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
+                /* initialize queue of Yolo */
+                while (!queueYoloBboxLeft.empty())
+                {
+                    queueYoloBboxLeft.pop();
+                }
+                while (!queueYoloClassIndexLeft.empty())
+                {
+                    queueYoloClassIndexLeft.pop();
+                }
+                queueYoloClassIndexLeft.push(classIndexTMLeft);
+            }
         }
-
-        // nothing to do
+        else
+        {
+            // nothing to do
+        }
     }
 }
 
@@ -1294,15 +1357,44 @@ void getTemplateMatchingDataLeft(bool& boolTrackerTM, std::vector<int>& classInd
     }
 }
 
+void organizeData(std::vector<bool>& boolScalesTM, bool boolTrackerYolo, std::vector<int>& classIndexTMLeft, std::vector<cv::Mat1b>& templatesTM,
+    std::vector<cv::Rect2d>& bboxesTM, std::vector<cv::Mat1b>& updatedTemplates,std::vector<cv::Rect2d>& updatedBboxes, std::vector<int>& updatedClasses, int& numTrackersTM)
+{
+    std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
+    std::cout << "TM :: Yolo data is available" << std::endl;
+    boolTrackerYolo = true;
+    if (!boolScalesTM.empty())
+    {
+        boolScalesTM.clear(); // clear all elements of scales
+    }
+    // get Yolo data
+    std::vector<cv::Mat1b> templatesYoloLeft;
+    templatesYoloLeft.reserve(100); // get new data
+    std::vector<cv::Rect2d> bboxesYoloLeft;
+    bboxesYoloLeft.reserve(100); // get current frame data
+    std::vector<int> classIndexesYoloLeft;
+    classIndexesYoloLeft.reserve(300);
+    getYoloDataLeft(templatesYoloLeft, bboxesYoloLeft, classIndexesYoloLeft); // get new frame
+    // combine Yolo and TM data, and update latest data
+    combineYoloTMData(classIndexesYoloLeft, classIndexTMLeft, templatesYoloLeft, templatesTM, bboxesYoloLeft, bboxesTM,
+        updatedTemplates, updatedBboxes, updatedClasses, boolScalesTM, numTrackersTM);
+}
+
 void getYoloDataLeft(std::vector<cv::Mat1b>& newTemplates, std::vector<cv::Rect2d>& newBboxes, std::vector<int>& newClassIndexes)
 {
     //std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
     newTemplates = queueYoloTemplateLeft.front();
     newBboxes = queueYoloBboxLeft.front();
     newClassIndexes = queueYoloClassIndexLeft.front();
-    queueYoloTemplateLeft.pop();
-    queueYoloBboxLeft.pop();
-    queueYoloClassIndexLeft.pop();
+    std::cout << "TM get data from Yolo ::class label :: ";
+    for (const int& classIndex : newClassIndexes)
+    {
+        std::cout << classIndex << " ";
+    }
+    std::cout << std::endl;
+    //queueYoloTemplateLeft.pop();
+    //queueYoloBboxLeft.pop();
+    //queueYoloClassIndexLeft.pop();
 }
 
 void combineYoloTMData(std::vector<int>& classIndexesYoloLeft, std::vector<int>& classIndexTMLeft, std::vector<cv::Mat1b>& templatesYoloLeft, std::vector<cv::Mat1b>& templatesTM,
@@ -1415,6 +1507,7 @@ void combineYoloTMData(std::vector<int>& classIndexesYoloLeft, std::vector<int>&
 void processTM(std::vector<int>& updatedClasses, std::vector<cv::Mat1b>& updatedTemplates, std::vector<bool>& boolScalesTM, std::vector<cv::Rect2d>& updatedBboxes, cv::Mat1b& img,
     std::vector<cv::Mat1b>& updatedTemplatesTM, std::vector<cv::Rect2d>& updatedBboxesTM, std::vector<int>& updatedClassesTM, std::vector<bool>& updatedSearchScales)
 {
+
     int counterTracker = 0;
     // get bbox from queue for limiting search area
     int leftSearch, topSearch, rightSearch, bottomSearch;
@@ -1449,6 +1542,7 @@ void processTM(std::vector<int>& updatedClasses, std::vector<cv::Mat1b>& updated
                 bottomSearch = std::min(img.rows, static_cast<int>(updatedBboxes[counterTracker].y + (scaleYYolo + 1) * updatedBboxes[counterTracker].height / 2));
             }
             cv::Rect2d searchArea(leftSearch, topSearch, (rightSearch - leftSearch), (bottomSearch - topSearch));
+            std::cout << "img size : width = " << img.cols << ", height = " << img.rows << std::endl;
             cv::Mat1b croppedImg = img.clone();
             croppedImg = croppedImg(searchArea); // crop img
             std::cout << "crop img" << std::endl;
@@ -1507,6 +1601,7 @@ void processTM(std::vector<int>& updatedClasses, std::vector<cv::Mat1b>& updated
                 topRoi = std::max(0,static_cast<int>(matchLoc.y + topSearch));
                 rightRoi = std::min(img.cols,static_cast<int>(leftRoi + templateImg.cols));
                 bottomRoi = std::min(img.rows,static_cast<int>(topRoi + templateImg.rows));
+                std::cout << "updated template Roi : left=" << leftRoi << ", top =" << topRoi << ", right=" << rightRoi << ", bottom=" << bottomRoi << std::endl;
                 // update roi
                 roi.x = leftRoi;
                 roi.y = topRoi;
