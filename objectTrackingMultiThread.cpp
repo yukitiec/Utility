@@ -65,6 +65,7 @@ std::queue<std::vector<int>> queueYoloClassIndexLeft;     // queue for class ind
 std::queue<std::vector<int>> queueTMClassIndexLeft;       // queue for class index
 std::queue<std::vector<bool>> queueTMScalesLeft;          // queue for search area scale
 std::queue<bool> queueLabelUpdateLeft;                    // for updating labels of sequence data
+std::queue<int> queueNumLabels; // current labels number -> for maintaining label number consistency
 
 // right cam
 std::queue<std::vector<cv::Mat1b>> queueYoloTemplateRight; // queue for yolo template : for real cv::Mat type
@@ -85,14 +86,16 @@ std::queue<std::vector<int>> queueTargetClassIndexesRight;  // class from templa
 
 // declare function
 /* utility */
-void checkStorage(std::vector<std::vector<cv::Rect2d>>&);
-void checkClassStorage(std::vector<std::vector<int>>&);
+void checkStorage(std::vector<std::vector<cv::Rect2d>>&, std::vector<int>&);
+void checkClassStorage(std::vector<std::vector<int>>&, std::vector<int>&);
+void checkStorageTM(std::vector<std::vector<cv::Rect2d>>&, std::vector<int>&);
+void checkClassStorageTM(std::vector<std::vector<int>>&, std::vector<int>&);
 /* get img */
 bool getImagesFromQueueYolo(cv::Mat1b&, int&); // get image from queue
 bool getImagesFromQueueTM(cv::Mat1b&, int&);
 /* template matching */
 void templateMatching();                                                                                                                                  // void* //proto definition
-void templateMatchingForLeft(cv::Mat1b&, const int, std::vector<cv::Mat1b>&, std::vector<std::vector<cv::Rect2d>>&, std::vector<std::vector<int>>&);  //, int, int, float, const int);
+void templateMatchingForLeft(cv::Mat1b&, const int, std::vector<cv::Mat1b>&, std::vector<std::vector<cv::Rect2d>>&, std::vector<std::vector<int>>&, std::vector<int>&, std::vector<int>&);  //, int, int, float, const int);
 void organizeData(std::vector<bool>&, bool, std::vector<int>&, std::vector<cv::Mat1b>&,std::vector<cv::Rect2d>&, std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&, std::vector<int>&, int&);
 void combineYoloTMData(std::vector<int>&, std::vector<int>&, std::vector<cv::Mat1b>&, std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&,
     std::vector<cv::Rect2d>&, std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&, std::vector<int>&, std::vector<bool>&, const int&);
@@ -103,7 +106,9 @@ void getYoloDataLeft(std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&, std::vec
 //void push2YoloDataLeft(std::vector<cv::Rect2d>&, std::vector<int>&);
 /* read img */
 void pushFrame(cv::Mat1b&, const int);
+void removeFrame();
 
+/*  YOLO class definition  */
 /*  YOLO class definition  */
 class YOLODetect
 {
@@ -112,7 +117,7 @@ private:
     torch::DeviceType devicetype;
     torch::Device* device;
 
-    std::string yolofilePath = "yolov8n_epoch2200.torchscript";
+    std::string yolofilePath = "yolov8m.torchscript";
     int frameWidth = 320;
     int frameHeight = 320;
     const int yoloWidth = 320;
@@ -120,7 +125,7 @@ private:
     const cv::Size YOLOSize{ yoloWidth, yoloHeight };
     const float IoUThreshold = 0.4;
     const float ConfThreshold = 0.3;
-    const float IoUThresholdIdentity = 0.25; // for maitainig consistency of tracking
+    const float IoUThresholdIdentity = 0.3; // for maitainig consistency of tracking
     /* initialize function */
     void initializeDevice()
     {
@@ -157,7 +162,7 @@ public:
     };
     ~YOLODetect() { delete device; }; // Deconstructor
 
-    void detectLeft(cv::Mat1b& frame, const int frameIndex, std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver)
+    void detectLeft(cv::Mat1b& frame, const int frameIndex, std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver, std::vector<int>& detectedFrame, std::vector<int>& detectedFrameClass)
     {
         /* inference by YOLO
          *  Args:
@@ -172,29 +177,28 @@ public:
         torch::Tensor imgTensor;
         preprocessImg(frame, imgTensor);
         // std::cout << "finish preprocess" << std::endl;
-
+        /* get latest data */
+        std::vector<cv::Rect2d> bboxesCandidateTMLeft; // for limiting detection area
+        std::vector<int> classIndexesTMLeft;
+        if (!queueTMClassIndexLeft.empty())
+        {
+            getLatestDataLeft(bboxesCandidateTMLeft, classIndexesTMLeft); // get latest data
+        }
         // std::cout << imgTensor.sizes() << std::endl;
         /* inference */
         torch::Tensor preds;
-        auto start = std::chrono::high_resolution_clock::now();
+        //auto start = std::chrono::high_resolution_clock::now();
         /* wrap to disable grad calculation */
         {
             torch::NoGradGuard no_grad;
             preds = mdl.forward({ imgTensor }).toTensor(); // preds shape : [1,6,2100]
         }
-        auto stop = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
-        std::cout << "Time taken by Yolo inference: " << duration.count() << " milliseconds" << std::endl;
+        //auto stop = std::chrono::high_resolution_clock::now();
+        //auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+        //std::cout << "Time taken by Yolo inference: " << duration.count() << " milliseconds" << std::endl;
         // std::cout << "finish inference" << std::endl;
-        /* get latest data */
-        std::vector<cv::Rect2d> bboxesCandidateTMLeft; // for limiting detection area
-        std::vector<int> classIndexesTMLeft;           // candidate class from TM
+        // candidate class from TM
         /* get latest data from Template Matching */
-        if (!queueYoloClassIndexLeft.empty())
-        {
-            std::cout << "Yolo detection : get latest data!" << std::endl;
-            getYoloDataLeft(bboxesCandidateTMLeft, classIndexesTMLeft); // get latest data
-        }
         /* postProcess */
         // std::cout << "post process" << std::endl;
         preds = preds.permute({ 0, 2, 1 }); // change order : (1,6,2100) -> (1,2100,6)
@@ -203,13 +207,13 @@ public:
         std::vector<torch::Tensor> detectedBoxes0Left, detectedBoxes1Left; //(n,6),(m,6)
         non_max_suppression2(preds, detectedBoxes0Left, detectedBoxes1Left, ConfThreshold, IoUThreshold);
 
-        std::cout << "BBOX for Ball : " << detectedBoxes0Left.size() << " BBOX for BOX : " << detectedBoxes1Left.size() << std::endl;
+        //std::cout << "BBOX for Ball : " << detectedBoxes0Left.size() << " BBOX for BOX : " << detectedBoxes1Left.size() << std::endl;
         std::vector<cv::Rect2d> existedRoi, newRoi;
         std::vector<int> existedClass, newClass;
         /* Roi Setting : take care of dealing with TM data */
         /* ROI and class index management */
         roiSetting(detectedBoxes0Left, existedRoi, existedClass, newRoi, newClass, BALL, bboxesCandidateTMLeft, classIndexesTMLeft);
-        if (!existedClass.empty())
+        /*if (!existedClass.empty())
         {
             std::cout << "existed class after roisetting of Ball:" << std::endl;
             for (const int& classIndex : existedClass)
@@ -218,9 +222,10 @@ public:
             }
             std::cout << std::endl;
         }
+        */
         roiSetting(detectedBoxes1Left, existedRoi, existedClass, newRoi, newClass, BOX, bboxesCandidateTMLeft, existedClass);
         /* in Ball roisetting update all classIndexesTMLeft to existedClass, so here adapt existedClass as a reference class */
-        if (!existedClass.empty())
+        /*if (!existedClass.empty())
         {
             std::cout << "existedClass after roiSetting of Box:" << std::endl;
             for (const int& classIndex : existedClass)
@@ -228,9 +233,9 @@ public:
                 std::cout << classIndex << " ";
             }
             std::cout << std::endl;
-        }
+        }*/
         /* push and save data */
-        push2QueueLeft(existedRoi, newRoi, existedClass, newClass, frame, posSaver, classSaver);
+        push2QueueLeft(existedRoi, newRoi, existedClass, newClass, frame, posSaver, classSaver, frameIndex, detectedFrame, detectedFrameClass);
     }
 
     void preprocessImg(cv::Mat1b& frame, torch::Tensor& imgTensor)
@@ -398,11 +403,11 @@ public:
          * Third : if not match : adapt as a new templates and add after TM data
          * Fourth : return all class indexes including -1 (not tracked one) for maintainig data consistency
          */
-        std::cout << "bboxesYolo size=" << detectedBoxes.size() << std::endl;
+         //std::cout << "bboxesYolo size=" << detectedBoxes.size() << std::endl;
          /* detected by Yolo */
         if (!detectedBoxes.empty())
         {
-            std::cout << "yolo detection exists" << std::endl;
+            //std::cout << "yolo detection exists" << std::endl;
             /* some trackers exist */
             if (!classIndexesTM.empty())
             {
@@ -453,7 +458,7 @@ public:
         /* No object detected in Yolo -> return -1 class label */
         else
         {
-            std::cout << "yolo detection doesn't exist" << std::endl;
+            //std::cout << "yolo detection doesn't exist" << std::endl;
             /* some TM trackers exist */
             /* if class label is equal to 0, return -1 if existed label == 0 or -1 and return the same label if classIndex is otherwise*/
             if (candidateIndex == 0)
@@ -502,8 +507,8 @@ public:
                     int counterIteration = 0;
                     for (const int& classIndex : existedClass)
                     {
-                        std::cout << "bboxesCandidate size = " << bboxesCandidate.size() << std::endl;
-                        std::cout << "counterCandidate=" << counterCandidate << std::endl;
+                        //std::cout << "bboxesCandidate size = " << bboxesCandidate.size() << std::endl;
+                        //std::cout << "counterCandidate=" << counterCandidate << std::endl;
                         /* if same label -> failed to track in YOLO  */
                         if (classIndex == candidateIndex)
                         {
@@ -630,7 +635,7 @@ public:
                             {
                                 existedClass.at(counterIteration) = candidateIndex;
                             }
-                            std::cout << "TM and Yolo Tracker matched!" << std::endl;
+                            //std::cout << "TM and Yolo Tracker matched!" << std::endl;
                             existedRoi.push_back(bboxTemp);
                             // delete candidate bbox
                             bboxesYolo.erase(bboxesYolo.begin() + indexMatch); // erase detected bbox from bboxes Yolo -> number of bboxesYolo decrease
@@ -641,22 +646,19 @@ public:
                             /* class label is 0 */
                             if (candidateIndex == 0)
                             {
-                                std::cout << "TM and Yolo Tracker didn't match" << std::endl;
+                                //std::cout << "TM and Yolo Tracker didn't match" << std::endl;
                                 existedClass.push_back(-1);
                             }
                             /* class label is other than 0 */
                             else
                             {
-                                std::cout << "TM and Yolo Tracker didn't match" << std::endl;
+                                //std::cout << "TM and Yolo Tracker didn't match" << std::endl;
                                 existedClass.at(counterIteration) = -1;
                             }
-                            
+
                         }
                         /* delete candidate bbox */
-                        if (!bboxesCandidate.empty())
-                        {
-                            bboxesCandidate.erase(bboxesCandidate.begin() + counterCandidateTM); // delete TM latest roi to maintain roi order
-                        }
+                        bboxesCandidate.erase(bboxesCandidate.begin() + counterCandidateTM); // delete TM latest roi to maintain roi order
                     }
                     /* other labels -> push back same label to maintain order only when candidateIndex=0 */
                     else if (candidateIndex != classIndex && candidateIndex == 0)
@@ -733,10 +735,11 @@ public:
 
     void push2QueueLeft(std::vector<cv::Rect2d>& existedRoi, std::vector<cv::Rect2d>& newRoi,
         std::vector<int>& existedClass, std::vector<int>& newClass, cv::Mat1b& frame,
-        std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver)
+        std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver,
+        const int& frameIndex, std::vector<int>& detectedFrame, std::vector<int>& detectedFrameClass)
     {
         /*
-         * push detection data to queueuLeft
+         * push detection data to queueLeft
          */
         std::vector<cv::Rect2d> updatedRoi;
         updatedRoi.reserve(100);
@@ -749,43 +752,39 @@ public:
         /* detection is successful */
         if (!updatedRoi.empty())
         {
+            /* initialize queueYolo for maintaining data consistency */
+            if (!queueYoloBboxLeft.empty()) queueYoloBboxLeft.pop();
+            if (!queueYoloTemplateLeft.empty()) queueYoloTemplateLeft.pop();
+            if (!queueYoloClassIndexLeft.empty()) queueYoloClassIndexLeft.pop();
             // std::cout << "detection succeeded" << std::endl;
             // save detected data
             posSaver.push_back(updatedRoi);
             classSaver.push_back(updatedClassIndexes);
-
+            detectedFrame.push_back(frameIndex);
+            detectedFrameClass.push_back(frameIndex);
             // push detected data
-            std::unique_lock<std::mutex> lock(mtxYoloLeft);
-            /*initialize queue*/
-            while (!queueYoloClassIndexLeft.empty())
-            {
-                queueYoloClassIndexLeft.pop();
-            }
-            while (!queueYoloBboxLeft.empty())
-            {
-                queueYoloBboxLeft.pop();
-            }
-            while (!queueYoloTemplateLeft.empty())
-            {
-                queueYoloTemplateLeft.pop();
-            }
+            // std::unique_lock<std::mutex> lock(mtxYoloLeft);
             /* finish initialization */
             queueYoloBboxLeft.push(updatedRoi);
             queueYoloTemplateLeft.push(updatedTemplates);
             queueYoloClassIndexLeft.push(updatedClassIndexes);
+            int numLabels = updatedClassIndexes.size();
+            if (!queueNumLabels.empty()) queueNumLabels.pop();
+            queueNumLabels.push(numLabels);
         }
         /* no object detected -> return class label -1 if TM tracker exists */
         else
         {
             if (!updatedClassIndexes.empty())
             {
-                std::unique_lock<std::mutex> lock(mtxYoloLeft);
-                /*initialize queue*/
-                while (!queueYoloClassIndexLeft.empty())
-                {
-                    queueYoloClassIndexLeft.pop();
-                }
+                // std::unique_lock<std::mutex> lock(mtxYoloLeft);
+                /* initialize queueYolo for maintaining data consistency */
+                if (!queueYoloClassIndexLeft.empty()) queueYoloClassIndexLeft.pop();
                 queueYoloClassIndexLeft.push(updatedClassIndexes);
+                detectedFrameClass.push_back(frameIndex);
+                classSaver.push_back(updatedClassIndexes);
+                int numLabels = updatedClassIndexes.size();
+                queueNumLabels.push(numLabels);
             }
             /* no class Indexes -> nothing to do */
             else
@@ -799,9 +798,9 @@ public:
         cv::Mat1b& frame, std::vector<cv::Rect2d>& updatedRoi, std::vector<cv::Mat1b>& updatedTemplates,
         std::vector<int>& updatedClassIndexes)
     {
-        std::cout << "updateData function" << std::endl;
+        //std::cout << "updateData function" << std::endl;
         /* firstly add existed class and ROi*/
-        std::cout << "Existed class" << std::endl;
+        //std::cout << "Existed class" << std::endl;
         if (!existedRoi.empty())
         {
             /* update bbox and templates */
@@ -813,9 +812,9 @@ public:
             for (const int& classIndex : existedClass)
             {
                 updatedClassIndexes.push_back(classIndex);
-                std::cout << classIndex << " ";
+                //std::cout << classIndex << " ";
             }
-            std::cout << std::endl;
+            //std::cout << std::endl;
         }
         else
         {
@@ -824,15 +823,15 @@ public:
                 for (const int& classIndex : existedClass)
                 {
                     updatedClassIndexes.push_back(classIndex);
-                    std::cout << classIndex << " ";
+                    //std::cout << classIndex << " ";
                 }
-                std::cout << std::endl;
+                //std::cout << std::endl;
             }
         }
         /* secondly add new roi and class */
-        std::cout << "new detection" << std::endl;
         if (!newRoi.empty())
         {
+            //std::cout << "new detection" << std::endl;
             for (const cv::Rect2d& roi : newRoi)
             {
                 updatedRoi.push_back(roi);
@@ -841,64 +840,46 @@ public:
             for (const int& classIndex : newClass)
             {
                 updatedClassIndexes.push_back(classIndex);
-                std::cout << classIndex << " ";
+                //std::cout << classIndex << " ";
             }
-            std::cout << std::endl;
+            //std::cout << std::endl;
         }
         else
         {
-            if (newClass.empty())
+            if (!newClass.empty())
             {
                 for (const int& classIndex : newClass)
                 {
                     updatedClassIndexes.push_back(classIndex);
-                    std::cout << classIndex << " ";
+                    //std::cout << classIndex << " ";
                 }
-                std::cout << std::endl;
+                //std::cout << std::endl;
             }
         }
     }
 
-    void drawRectangle(cv::Mat1b frame, std::vector<cv::Rect2d>& ROI, int index)
-    {
-        if (ROI.size() != 0)
-        {
-            if (index == 0) // ball
-            {
-                for (int k = 0; k < ROI.size(); k++)
-                {
-                    cv::rectangle(frame, cv::Point((int)ROI[k].x, (int)ROI[k].y), cv::Point((int)(ROI[k].x + ROI[k].width), (int)(ROI[k].y + ROI[k].height)), cv::Scalar(255, 0, 0), 3);
-                }
-            }
-            if (index == 1) // box
-            {
-                for (int k = 0; k < ROI.size(); k++)
-                {
-                    cv::rectangle(frame, cv::Point((int)ROI[k].x, (int)ROI[k].y), cv::Point((int)(ROI[k].x + ROI[k].width), (int)(ROI[k].y + ROI[k].height)), cv::Scalar(0, 255, 255), 3);
-                }
-            }
-        }
-    }
-
-    void getYoloDataLeft(std::vector<cv::Rect2d>& bboxes, std::vector<int>& classes)
+    void getLatestDataLeft(std::vector<cv::Rect2d>& bboxes, std::vector<int>& classes)
     {
         //std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
-        // std::cout << "Left Img : Yolo bbox available from TM " << std::endl;
-        if (!queueYoloBboxLeft.empty())
-        {
-            bboxes = queueYoloBboxLeft.front(); // get new yolodata : {{x,y.width,height},...}
-            queueYoloBboxLeft.pop();            // remove yolo bbox
-            /* for debug */
-            std::cout << ":: Left :: latest yolo data " << std::endl;
-            for (const cv::Rect2d& bbox : bboxes)
-            {
-                std::cout << "BBOX ::" << bbox.x << "," << bbox.y << "," << bbox.width << "," << bbox.height << std::endl;
-            }
-        }
+        std::cout << "Yolo detection : get latest data!" << std::endl;
         if (!queueYoloClassIndexLeft.empty())
         {
-            classes = queueYoloClassIndexLeft.front(); // get current tracking status
-            queueYoloClassIndexLeft.pop();
+            classes = queueTMClassIndexLeft.front(); // get current tracking status
+            int labelCounter = queueNumLabels.front();
+            queueNumLabels.pop();
+            int numClassesTM = classes.size();
+            if (labelCounter > numClassesTM) // number of labels doesn't match -> have to check label data
+            {
+                /* getting iteratively until TM class labels are synchronized with Yolo data */
+                while (numClassesTM >= labelCounter) // >(greater than for first exchange between Yolo and TM)
+                {
+                    if (!queueTMClassIndexLeft.empty())
+                    {
+                        classes = queueTMClassIndexLeft.front(); // get current tracking status
+                        numClassesTM = classes.size();
+                    }
+                }
+            }
             std::cout << "::class label :: ";
             for (const int& classIndex : classes)
             {
@@ -906,10 +887,16 @@ public:
             }
             std::cout << std::endl;
         }
-        /* get rid of template images */
-        while (!queueYoloTemplateLeft.empty())
+        // std::cout << "Left Img : Yolo bbox available from TM " << std::endl;
+        if (!queueTMBboxLeft.empty())
         {
-            queueYoloTemplateLeft.pop();
+            bboxes = queueTMBboxLeft.front(); // get new yolodata : {{x,y.width,height},...}
+            /* for debug */
+            std::cout << ":: Left :: latest yolo data " << std::endl;
+            for (const cv::Rect2d& bbox : bboxes)
+            {
+                std::cout << "BBOX ::" << bbox.x << "," << bbox.y << "," << bbox.width << "," << bbox.height << std::endl;
+            }
         }
     }
 };
@@ -959,6 +946,10 @@ void yoloDetect()
     // vector for saving position
     std::vector<std::vector<cv::Rect2d>> posSaverYoloLeft;
     posSaverYoloLeft.reserve(300);
+    std::vector<int> detectedFrame;
+    detectedFrame.reserve(300);
+    std::vector<int> detectedFrameClass;
+    detectedFrame.reserve(300);
     std::vector<std::vector<int>> classSaverYoloLeft;
     classSaverYoloLeft.reserve(300);
     int frameIndex;
@@ -986,7 +977,7 @@ void yoloDetect()
         std::cout << " YOLO -- " << countIteration << " -- " << std::endl;
 
         /*start yolo detection */
-        yolodetectorLeft.detectLeft(img, frameIndex, posSaverYoloLeft, classSaverYoloLeft);
+        yolodetectorLeft.detectLeft(img, frameIndex, posSaverYoloLeft, classSaverYoloLeft, detectedFrame, detectedFrameClass);
         // std::thread threadLeftYolo(&YOLODetect::detectLeft, &yolodetectorLeft,std::ref(imgs[LEFT_CAMERA]), frameIndex, std::ref(posSaverYoloLeft),std::ref(classSaverYoloLeft));
         // std::thread threadRightYolo(&YOLODetect::detectRight, &yolodetectorRight,std::ref(imgs[RIGHT_CAMERA]), frameIndex, std::ref(posSaverYoloRight),std::ref(classSaverYoloRight));
         // wait for each thread finishing
@@ -1000,9 +991,9 @@ void yoloDetect()
     /* check data */
     std::cout << "position saver : Yolo : " << std::endl;
     std::cout << " : Left : " << std::endl;
-    checkStorage(posSaverYoloLeft);
+    checkStorage(posSaverYoloLeft, detectedFrame);
     std::cout << " : Left : " << std::endl;
-    checkClassStorage(classSaverYoloLeft);
+    checkClassStorage(classSaverYoloLeft, detectedFrameClass);
 }
 
 bool getImagesFromQueueYolo(cv::Mat1b& img, int& frameIndex)
@@ -1020,8 +1011,16 @@ bool getImagesFromQueueYolo(cv::Mat1b& img, int& frameIndex)
     return false;
 }
 
-void checkStorage(std::vector<std::vector<cv::Rect2d>>& posSaverYolo)
+void checkStorage(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vector<int>& detectedFrame)
 {
+    //prepare file
+    std::string filePathOF = "yoloTMMOT_bbox_IoU0.3_yolotestmp4.csv";
+    // Open the file for writing
+    std::ofstream outputFile(filePathOF);
+    if (!outputFile.is_open()) {
+        std::cerr << "Error: Could not open the file." << std::endl;
+    }
+    std::cout << "estimated position :: Yolo :: " << std::endl;
     int count = 1;
     std::cout << "posSaverYolo :: Contensts ::" << std::endl;
     for (int i = 0; i < posSaverYolo.size(); i++)
@@ -1029,24 +1028,57 @@ void checkStorage(std::vector<std::vector<cv::Rect2d>>& posSaverYolo)
         std::cout << (i + 1) << "-th iteration : " << std::endl;
         for (int j = 0; j < posSaverYolo[i].size(); j++)
         {
-            std::cout << (j + 1) << ":: left=" << posSaverYolo[i][j].x << ", top=" << posSaverYolo[i][j].y << ", width=" << posSaverYolo[i][j].width << ", height=" << posSaverYolo[i][j].height << std::endl;
+            std::cout << detectedFrame[i] << "-th frame :: left=" << posSaverYolo[i][j].x << ", top=" << posSaverYolo[i][j].y << ", width=" << posSaverYolo[i][j].width << ", height=" << posSaverYolo[i][j].height << std::endl;
+            outputFile << detectedFrame[i];
+            outputFile << ",";
+            outputFile << posSaverYolo[i][j].x;
+            outputFile << ",";
+            outputFile << posSaverYolo[i][j].y;
+            outputFile << ",";
+            outputFile << posSaverYolo[i][j].width;
+            outputFile << ",";
+            outputFile << posSaverYolo[i][j].height;
+            if (j != posSaverYolo[i].size() - 1)
+            {
+                outputFile << ",";
+            }
         }
+        outputFile << "\n";
     }
+    // close file
+    outputFile.close();
 }
 
-void checkClassStorage(std::vector<std::vector<int>>& classSaverYolo)
+void checkClassStorage(std::vector<std::vector<int>>& classSaverYolo, std::vector<int>& detectedFrame)
 {
+    //prepare file
+    std::string filePathOF = "yoloTMMOT_class_IoU0.4_yolotestmp4.csv";
+    // Open the file for writing
+    std::ofstream outputFile(filePathOF);
+    if (!outputFile.is_open()) {
+        std::cerr << "Error: Could not open the file." << std::endl;
+    }
     int count = 1;
     std::cout << "Class saver :: Contensts ::" << std::endl;
     for (int i = 0; i < classSaverYolo.size(); i++)
     {
-        std::cout << (i + 1) << "-th iteration : " << std::endl;
+        std::cout << detectedFrame[i] << "-th frame : " << std::endl;
         for (int j = 0; j < classSaverYolo[i].size(); j++)
         {
             std::cout << classSaverYolo[i][j] << " ";
+            outputFile << detectedFrame[i];
+            outputFile << ",";
+            outputFile << classSaverYolo[i][j];
+            if (j != classSaverYolo[i].size() - 1)
+            {
+                outputFile << ",";
+            }
         }
+        outputFile << "\n";
         std::cout << std::endl;
     }
+    // close file
+    outputFile.close();
 }
 
 /* template matching thread function definition */
@@ -1061,53 +1093,29 @@ void templateMatching() // void*
     posSaverTMLeft.reserve(2000);
     std::vector<std::vector<int>> classSaverTMLeft;
     classSaverTMLeft.reserve(2000);
+    std::vector<int> detectedFrame;
+    detectedFrame.reserve(300);
+    std::vector<int> detectedFrameClass;
+    detectedFrame.reserve(300);
 
     int countIteration = 0;
     int counterFinish = 0;
     /* sleep for 2 seconds */
     // std::this_thread::sleep_for(std::chrono::seconds(30));
     //  for each img iterations
-    int startCounter = 0; // after yolo detection has succeeded second times -> start template matching
-    std::cout << "- Template Matching idling -" << std::endl;
-    /* get rid of imgs until yolo inference started */
-    while (true)
+    int counterStart = 0;
+    while (counterStart < 2)
     {
         if (!queueYoloBboxLeft.empty())
         {
-            /* YOLO detection has succeede! */
-            if (startCounter == 2)
-            {
-                break;
-            }
             while (true)
             {
                 if (queueYoloBboxLeft.empty())
                 {
+                    counterStart += 1;
                     break;
                 }
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
-            startCounter++;
-            std::cout << "start counter = " << startCounter << std::endl;
-        }
-        else
-        {
-            // get img from queue
-            /*
-            if (!queueFrame.empty())
-            {
-                // std::cout << "get images from queue" << std::endl;
-                cv::Mat1b img;
-                int frameIndex;
-                getImagesFromQueueTM(img, frameIndex);
-            }
-            */
-            //else
-            //{
-            //}
-            // std::cout << "wait for YOLO inference " << std::endl;
-            std::cout << "wait for Yolo detection" << std::endl;
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));//static_cast<int>(1000 / FPS)));
         }
     }
     std::cout << "start template matching" << std::endl;
@@ -1141,7 +1149,7 @@ void templateMatching() // void*
         bool boolLeft = false;
         /*start template matching process */
         auto start = std::chrono::high_resolution_clock::now();
-        templateMatchingForLeft(img, frameIndex, templateImgsLeft, posSaverTMLeft,classSaverTMLeft);
+        templateMatchingForLeft(img, frameIndex, templateImgsLeft, posSaverTMLeft,classSaverTMLeft, detectedFrame, detectedFrameClass);
         auto stop = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
         std::cout << "Time taken by template matching: " << duration.count() << " milliseconds" << std::endl;
@@ -1149,10 +1157,80 @@ void templateMatching() // void*
     // check data
     std::cout << "position saver : TM : " << std::endl;
     std::cout << " : Left : " << std::endl;
-    checkStorage(posSaverTMLeft);
+    checkStorageTM(posSaverTMLeft,detectedFrame);
     std::cout << "Class saver : TM : " << std::endl;
     std::cout << " : Left : " << std::endl;
-    checkClassStorage(classSaverTMLeft); 
+    checkClassStorage(classSaverTMLeft,detectedFrameClass); 
+}
+
+void checkStorageTM(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vector<int>& detectedFrame)
+{
+    //prepare file
+    std::string filePathOF = "TMData_yoloTMMOT_bbox_IoU0.3_yolotestmp4.csv";
+    // Open the file for writing
+    std::ofstream outputFile(filePathOF);
+    if (!outputFile.is_open()) {
+        std::cerr << "Error: Could not open the file." << std::endl;
+    }
+    std::cout << "estimated position :: Yolo :: " << std::endl;
+    int count = 1;
+    std::cout << "posSaverYolo :: Contensts ::" << std::endl;
+    for (int i = 0; i < posSaverYolo.size(); i++)
+    {
+        std::cout << (i + 1) << "-th iteration : " << std::endl;
+        for (int j = 0; j < posSaverYolo[i].size(); j++)
+        {
+            std::cout << detectedFrame[i] << "-th frame :: left=" << posSaverYolo[i][j].x << ", top=" << posSaverYolo[i][j].y << ", width=" << posSaverYolo[i][j].width << ", height=" << posSaverYolo[i][j].height << std::endl;
+            outputFile << detectedFrame[i];
+            outputFile << ",";
+            outputFile << posSaverYolo[i][j].x;
+            outputFile << ",";
+            outputFile << posSaverYolo[i][j].y;
+            outputFile << ",";
+            outputFile << posSaverYolo[i][j].width;
+            outputFile << ",";
+            outputFile << posSaverYolo[i][j].height;
+            if (j != posSaverYolo[i].size() - 1)
+            {
+                outputFile << ",";
+            }
+        }
+        outputFile << "\n";
+    }
+    // close file
+    outputFile.close();
+}
+
+void checkClassStorageTM(std::vector<std::vector<int>>& classSaverYolo, std::vector<int>& detectedFrame)
+{
+    //prepare file
+    std::string filePathOF = "TMData_yoloTMMOT_class_IoU0.4_yolotestmp4.csv";
+    // Open the file for writing
+    std::ofstream outputFile(filePathOF);
+    if (!outputFile.is_open()) {
+        std::cerr << "Error: Could not open the file." << std::endl;
+    }
+    int count = 1;
+    std::cout << "Class saver :: Contensts ::" << std::endl;
+    for (int i = 0; i < classSaverYolo.size(); i++)
+    {
+        std::cout << detectedFrame[i] << "-th frame : " << std::endl;
+        for (int j = 0; j < classSaverYolo[i].size(); j++)
+        {
+            std::cout << classSaverYolo[i][j] << " ";
+            outputFile << detectedFrame[i];
+            outputFile << ",";
+            outputFile << classSaverYolo[i][j];
+            if (j != classSaverYolo[i].size() - 1)
+            {
+                outputFile << ",";
+            }
+        }
+        outputFile << "\n";
+        std::cout << std::endl;
+    }
+    // close file
+    outputFile.close();
 }
 
 bool getImagesFromQueueTM(cv::Mat1b& img, int& frameIndex)
@@ -1162,19 +1240,23 @@ bool getImagesFromQueueTM(cv::Mat1b& img, int& frameIndex)
     {
         return false;
     }
-    img = queueFrame.front();
-    frameIndex = queueFrameIndex.front();
-    queueTargetFrameIndex.push(frameIndex);
-    // remove frame from queue
-    queueFrame.pop();
-    queueFrameIndex.pop();
-    return true;
+    else
+    {
+        img = queueFrame.front();
+        frameIndex = queueFrameIndex.front();
+        queueTargetFrameIndex.push(frameIndex);
+        // remove frame from queue
+        queueFrame.pop();
+        queueFrameIndex.pop();
+        return true;
+    }
 }
 
 /*  Template Matching Function  */
 
 /* Template Matching :: Left */
-void templateMatchingForLeft(cv::Mat1b& img, const int frameIndex, std::vector<cv::Mat1b>& templateImgs, std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver)
+void templateMatchingForLeft(cv::Mat1b& img, const int frameIndex, std::vector<cv::Mat1b>& templateImgs, 
+            std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver, std::vector<int>& detectedFrame, std::vector<int>& detectedFrameClass)
 {
     // for updating templates
     std::vector<cv::Rect2d> updatedBboxes;
@@ -1240,6 +1322,7 @@ void templateMatchingForLeft(cv::Mat1b& img, const int frameIndex, std::vector<c
         std::cout << "processTM finish" << std::endl;
         if (!updatedSearchScales.empty())
         {
+            if (!queueTMScalesLeft.empty()) queueTMScalesLeft.pop(); //pop before push
             queueTMScalesLeft.push(updatedSearchScales);
         }
         /* if yolo data is avilable -> send signal to target predict to change labels*/
@@ -1247,81 +1330,38 @@ void templateMatchingForLeft(cv::Mat1b& img, const int frameIndex, std::vector<c
         {
             queueLabelUpdateLeft.push(true);
         }
-        std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
-        /* Yolo update data -> don't push new data of TM*/
-        if (!queueYoloTemplateLeft.empty())
-        {
-            if (!updatedBboxesTM.empty())
-            {
-                queueTMBboxLeft.push(updatedBboxesTM); // push roi
-                posSaver.push_back(updatedBboxes);     // save current position to the vector
-            }
-            if (!updatedTemplatesTM.empty())
-            {
-                queueTMTemplateLeft.push(updatedTemplatesTM); // push template image
-            }
-            if (!updatedClassesTM.empty())
-            {
-                queueTMClassIndexLeft.push(updatedClassesTM);
-                classSaver.push_back(updatedClassesTM); // save current class to the saver
-            }
-        }
         else
         {
-            std::cout << "queueYoloTemplate is empty" << std::endl;
-            /* initialize queue of Yolo */
-            while (!queueYoloBboxLeft.empty())
-            {
-                queueYoloBboxLeft.pop();
-            }
-            while (!queueYoloClassIndexLeft.empty())
-            {
-                queueYoloClassIndexLeft.pop();
-            }
-            /* finish initialize */
-            if (!updatedBboxesTM.empty())
-            {
-                queueTMBboxLeft.push(updatedBboxesTM); // push roi
-                posSaver.push_back(updatedBboxes);     // save current position to the vector
-                queueYoloBboxLeft.push(updatedBboxesTM);
-            }
-            if (!updatedTemplatesTM.empty())
-            {
-                queueTMTemplateLeft.push(updatedTemplatesTM); // push template image
-            }
-            if (!updatedClassesTM.empty())
-            {
-                queueTMClassIndexLeft.push(updatedClassesTM);
-                classSaver.push_back(updatedClassesTM); // save current class to the saver
-                queueYoloClassIndexLeft.push(updatedClassesTM);
-            }
+            queueLabelUpdateLeft.push(false);
         }
+        if (!updatedBboxesTM.empty())
+        {
+            if (!queueTMBboxLeft.empty()) queueTMBboxLeft.pop();
+            queueTMBboxLeft.push(updatedBboxesTM); // push roi
+            posSaver.push_back(updatedBboxes);     // save current position to the vector
+        }
+        if (!updatedTemplatesTM.empty())
+        {
+            if (!queueTMTemplateLeft.empty()) queueTMTemplateLeft.pop();
+            queueTMTemplateLeft.push(updatedTemplatesTM); // push template image
+        }
+        if (!updatedClassesTM.empty())
+        {
+            if (!queueTMClassIndexLeft.empty()) queueTMClassIndexLeft.pop();
+            queueTMClassIndexLeft.push(updatedClassesTM);
+            classSaver.push_back(updatedClassesTM); // save current class to the saver
+        }
+        detectedFrame.push_back(frameIndex);
+        detectedFrameClass.push_back(frameIndex);
     }
     else // no template or bbox -> nothing to do
     {
         if (!classIndexTMLeft.empty())
         {
+            if (!queueTMClassIndexLeft.empty()) queueTMClassIndexLeft.pop();
             queueTMClassIndexLeft.push(classIndexTMLeft);
             classSaver.push_back(classIndexTMLeft); // save current class to the saver
-            /* Yolo update data -> don't push new data of TM*/
-            if (!queueYoloTemplateLeft.empty())
-            {
-                /* go through */
-            }
-            else
-            {
-                std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
-                /* initialize queue of Yolo */
-                while (!queueYoloBboxLeft.empty())
-                {
-                    queueYoloBboxLeft.pop();
-                }
-                while (!queueYoloClassIndexLeft.empty())
-                {
-                    queueYoloClassIndexLeft.pop();
-                }
-                queueYoloClassIndexLeft.push(classIndexTMLeft);
-            }
+            detectedFrameClass.push_back(frameIndex);
         }
         else
         {
@@ -1336,7 +1376,6 @@ void getTemplateMatchingDataLeft(bool& boolTrackerTM, std::vector<int>& classInd
     {
         classIndexTMLeft = queueTMClassIndexLeft.front();
         numTrackersTM = classIndexTMLeft.size();
-        queueTMClassIndexLeft.pop();
     }
     if (!queueTMBboxLeft.empty() && !queueTMTemplateLeft.empty() && !queueTMScalesLeft.empty())
     {
@@ -1346,10 +1385,6 @@ void getTemplateMatchingDataLeft(bool& boolTrackerTM, std::vector<int>& classInd
         bboxesTM = queueTMBboxLeft.front();
         templatesTM = queueTMTemplateLeft.front();
         boolScalesTM = queueTMScalesLeft.front();
-
-        queueTMBboxLeft.pop();
-        queueTMTemplateLeft.pop();
-        queueTMScalesLeft.pop();
     }
     else
     {
@@ -1360,7 +1395,6 @@ void getTemplateMatchingDataLeft(bool& boolTrackerTM, std::vector<int>& classInd
 void organizeData(std::vector<bool>& boolScalesTM, bool boolTrackerYolo, std::vector<int>& classIndexTMLeft, std::vector<cv::Mat1b>& templatesTM,
     std::vector<cv::Rect2d>& bboxesTM, std::vector<cv::Mat1b>& updatedTemplates,std::vector<cv::Rect2d>& updatedBboxes, std::vector<int>& updatedClasses, int& numTrackersTM)
 {
-    std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
     std::cout << "TM :: Yolo data is available" << std::endl;
     boolTrackerYolo = true;
     if (!boolScalesTM.empty())
@@ -1382,7 +1416,7 @@ void organizeData(std::vector<bool>& boolScalesTM, bool boolTrackerYolo, std::ve
 
 void getYoloDataLeft(std::vector<cv::Mat1b>& newTemplates, std::vector<cv::Rect2d>& newBboxes, std::vector<int>& newClassIndexes)
 {
-    //std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
+    std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
     newTemplates = queueYoloTemplateLeft.front();
     newBboxes = queueYoloBboxLeft.front();
     newClassIndexes = queueYoloClassIndexLeft.front();
@@ -1392,9 +1426,6 @@ void getYoloDataLeft(std::vector<cv::Mat1b>& newTemplates, std::vector<cv::Rect2
         std::cout << classIndex << " ";
     }
     std::cout << std::endl;
-    //queueYoloTemplateLeft.pop();
-    //queueYoloBboxLeft.pop();
-    //queueYoloClassIndexLeft.pop();
 }
 
 void combineYoloTMData(std::vector<int>& classIndexesYoloLeft, std::vector<int>& classIndexTMLeft, std::vector<cv::Mat1b>& templatesYoloLeft, std::vector<cv::Mat1b>& templatesTM,
@@ -1408,7 +1439,7 @@ void combineYoloTMData(std::vector<int>& classIndexesYoloLeft, std::vector<int>&
     // think about tracker continuity : tracker survival : (not Yolo Tracker) and (not TM tracker)
 
     /* should check carefully -> compare num of detection */
-    for (const int classIndex : classIndexesYoloLeft)
+    for (const int& classIndex : classIndexesYoloLeft)
     {
         /* after 2nd time from YOLO data */
         if (numTrackersTM != 0)
@@ -1513,12 +1544,12 @@ void processTM(std::vector<int>& updatedClasses, std::vector<cv::Mat1b>& updated
     int leftSearch, topSearch, rightSearch, bottomSearch;
     // iterate for each tracking classes
     std::cout << "check updateClasses:" << std::endl;
-    for (const int classIndex : updatedClasses)
+    for (const int& classIndex : updatedClasses)
     {
         std::cout << classIndex << " ";
     }
     std::cout << std::endl;
-    for (const int classIndexTM : updatedClasses)
+    for (const int& classIndexTM : updatedClasses)
     {
         /* template exist -> start template matching */
         if (classIndexTM != -1)
@@ -1609,6 +1640,8 @@ void processTM(std::vector<int>& updatedClasses, std::vector<cv::Mat1b>& updated
                 roi.height = bottomRoi - topRoi;
                 // update template image
                 newTemplate = img(roi);
+                std::cout << "new ROI : left=" << roi.x << ", top=" << roi.y << ", width=" << roi.width << ", height=" << roi.height << std::endl;
+                std::cout << "new template size :: width = " << newTemplate.cols << ", height = " << newTemplate.rows << std::endl;
 
                 // update information
                 updatedBboxesTM.push_back(roi);
@@ -1646,13 +1679,40 @@ void pushFrame(cv::Mat1b& src, const int frameIndex)
     queueFrameIndex.push(frameIndex);
 }
 
+void removeFrame()
+{
+    int counterStart = 0;
+    while (counterStart < 2)
+    {
+        if (!queueYoloBboxLeft.empty())
+        {
+            while (true)
+            {
+                if (queueYoloBboxLeft.empty())
+                {
+                    counterStart += 1;
+                    break;
+                }
+            }
+        }
+    }
+    /* remove imgs */
+    while (!queueFrame.empty())
+    {
+        queueFrame.pop();
+        queueFrameIndex.pop();
+        std::this_thread::sleep_for(std::chrono::microseconds(3333));
+        std::cout << "remove image" << std::endl;
+    }
+}
+
 /*
  * main function
  */
 int main()
 {
     /* video inference */
-    const std::string filename = "yolotest.mp4";
+    const std::string filename = "test300fps.mp4";
     cv::VideoCapture capture(filename);
     if (!capture.isOpened())
     {
@@ -1667,6 +1727,7 @@ int main()
     std::cout << "start Yolo thread" << std::endl;
     std::thread threadTemplateMatching(templateMatching);
     std::cout << "start template matching thread" << std::endl;
+    std::thread threadRemoveImg(removeFrame);
     while (true)
     {
         // Read the next frame
@@ -1685,5 +1746,6 @@ int main()
     // std::thread threadTargetPredict(targetPredict);
     threadYolo.join();
     threadTemplateMatching.join();
+    threadRemoveImg.join();
     return 0;
 }
