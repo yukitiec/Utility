@@ -17,7 +17,7 @@
 #include <algorithm>
 
 
-std::mutex mtxImg, mtxYoloLeft, mtxYoloRight, mtxTarget; // define mutex
+std::mutex mtxImg, mtxYoloLeft, mtxTMLeft, mtxTarget; // define mutex
 
 // camera : constant setting
 const int LEFT_CAMERA = 0;
@@ -96,7 +96,7 @@ bool getImagesFromQueueTM(cv::Mat1b&, int&);
 /* template matching */
 void templateMatching();                                                                                                                                  // void* //proto definition
 void templateMatchingForLeft(cv::Mat1b&, const int, std::vector<cv::Mat1b>&, std::vector<std::vector<cv::Rect2d>>&, std::vector<std::vector<int>>&, std::vector<int>&, std::vector<int>&);  //, int, int, float, const int);
-void organizeData(std::vector<bool>&, bool, std::vector<int>&, std::vector<cv::Mat1b>&,std::vector<cv::Rect2d>&, std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&, std::vector<int>&, int&);
+void organizeData(std::vector<bool>&, bool&, std::vector<int>&, std::vector<cv::Mat1b>&,std::vector<cv::Rect2d>&, std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&, std::vector<int>&, int&);
 void combineYoloTMData(std::vector<int>&, std::vector<int>&, std::vector<cv::Mat1b>&, std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&,
     std::vector<cv::Rect2d>&, std::vector<cv::Mat1b>&, std::vector<cv::Rect2d>&, std::vector<int>&, std::vector<bool>&, const int&);
 void getTemplateMatchingDataLeft(bool&, std::vector<int>&, std::vector<cv::Rect2d>&, std::vector<cv::Mat1b>&, std::vector<bool>&, int&);
@@ -125,7 +125,7 @@ private:
     const cv::Size YOLOSize{ yoloWidth, yoloHeight };
     const float IoUThreshold = 0.4;
     const float ConfThreshold = 0.3;
-    const float IoUThresholdIdentity = 0.3; // for maitainig consistency of tracking
+    const float IoUThresholdIdentity = 0.1; // for maitainig consistency of tracking
     /* initialize function */
     void initializeDevice()
     {
@@ -752,10 +752,6 @@ public:
         /* detection is successful */
         if (!updatedRoi.empty())
         {
-            /* initialize queueYolo for maintaining data consistency */
-            if (!queueYoloBboxLeft.empty()) queueYoloBboxLeft.pop();
-            if (!queueYoloTemplateLeft.empty()) queueYoloTemplateLeft.pop();
-            if (!queueYoloClassIndexLeft.empty()) queueYoloClassIndexLeft.pop();
             // std::cout << "detection succeeded" << std::endl;
             // save detected data
             posSaver.push_back(updatedRoi);
@@ -764,6 +760,10 @@ public:
             detectedFrameClass.push_back(frameIndex);
             // push detected data
             // std::unique_lock<std::mutex> lock(mtxYoloLeft);
+            /* initialize queueYolo for maintaining data consistency */
+            if (!queueYoloBboxLeft.empty()) queueYoloBboxLeft.pop();
+            if (!queueYoloTemplateLeft.empty()) queueYoloTemplateLeft.pop();
+            if (!queueYoloClassIndexLeft.empty()) queueYoloClassIndexLeft.pop();
             /* finish initialization */
             queueYoloBboxLeft.push(updatedRoi);
             queueYoloTemplateLeft.push(updatedTemplates);
@@ -860,7 +860,7 @@ public:
 
     void getLatestDataLeft(std::vector<cv::Rect2d>& bboxes, std::vector<int>& classes)
     {
-        //std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
+        //std::unique_lock<std::mutex> lock(mtxTMLeft); // Lock the mutex
         std::cout << "Yolo detection : get latest data!" << std::endl;
         if (!queueYoloClassIndexLeft.empty())
         {
@@ -880,6 +880,7 @@ public:
                     }
                 }
             }
+            std::unique_lock<std::mutex> lock(mtxTMLeft);
             std::cout << "::class label :: ";
             for (const int& classIndex : classes)
             {
@@ -991,8 +992,10 @@ void yoloDetect()
     /* check data */
     std::cout << "position saver : Yolo : " << std::endl;
     std::cout << " : Left : " << std::endl;
+    std::cout << "posSaverYoloLeft size:" << posSaverYoloLeft.size() << ", detectedFrame size:" << detectedFrame.size() << std::endl;
     checkStorage(posSaverYoloLeft, detectedFrame);
     std::cout << " : Left : " << std::endl;
+    std::cout << "classSaverYoloLeft size:" << classSaverYoloLeft.size() << ", detectedFrameClass size:" << detectedFrameClass.size() << std::endl;
     checkClassStorage(classSaverYoloLeft, detectedFrameClass);
 }
 
@@ -1014,7 +1017,7 @@ bool getImagesFromQueueYolo(cv::Mat1b& img, int& frameIndex)
 void checkStorage(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vector<int>& detectedFrame)
 {
     //prepare file
-    std::string filePathOF = "yoloTMMOT_bbox_IoU0.3_yolotestmp4.csv";
+    std::string filePathOF = "yoloData_yoloTMMOT_bbox_IoU0.1_test300fpsmp4.csv";
     // Open the file for writing
     std::ofstream outputFile(filePathOF);
     if (!outputFile.is_open()) {
@@ -1052,7 +1055,7 @@ void checkStorage(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vecto
 void checkClassStorage(std::vector<std::vector<int>>& classSaverYolo, std::vector<int>& detectedFrame)
 {
     //prepare file
-    std::string filePathOF = "yoloTMMOT_class_IoU0.4_yolotestmp4.csv";
+    std::string filePathOF = "yoloData_yoloTMMOT_class_IoU0.1_test300fpsmp4.csv";
     // Open the file for writing
     std::ofstream outputFile(filePathOF);
     if (!outputFile.is_open()) {
@@ -1143,7 +1146,6 @@ void templateMatching() // void*
         {
             counterFinish = 0; // reset
         }
-
         std::vector<cv::Mat1b> templateImgsLeft;
         templateImgsLeft.reserve(100);
         bool boolLeft = false;
@@ -1157,16 +1159,18 @@ void templateMatching() // void*
     // check data
     std::cout << "position saver : TM : " << std::endl;
     std::cout << " : Left : " << std::endl;
+    std::cout << "posSaverTMLeft size:" << posSaverTMLeft.size() << ", detectedFrame size:" << detectedFrame.size() << std::endl;
     checkStorageTM(posSaverTMLeft,detectedFrame);
     std::cout << "Class saver : TM : " << std::endl;
     std::cout << " : Left : " << std::endl;
-    checkClassStorage(classSaverTMLeft,detectedFrameClass); 
+    std::cout << "classSaverTMLeft size:" << classSaverTMLeft.size() << ", detectedFrameClass size:" << detectedFrameClass.size() << std::endl;
+    checkClassStorageTM(classSaverTMLeft,detectedFrameClass); 
 }
 
 void checkStorageTM(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vector<int>& detectedFrame)
 {
     //prepare file
-    std::string filePathOF = "TMData_yoloTMMOT_bbox_IoU0.3_yolotestmp4.csv";
+    std::string filePathOF = "TMData_yoloTMMOT_bbox_IoU0.1_test300fpsmp4.csv";
     // Open the file for writing
     std::ofstream outputFile(filePathOF);
     if (!outputFile.is_open()) {
@@ -1174,7 +1178,7 @@ void checkStorageTM(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vec
     }
     std::cout << "estimated position :: Yolo :: " << std::endl;
     int count = 1;
-    std::cout << "posSaverYolo :: Contensts ::" << std::endl;
+    std::cout << "posSaverYolo :: Contents ::" << std::endl;
     for (int i = 0; i < posSaverYolo.size(); i++)
     {
         std::cout << (i + 1) << "-th iteration : " << std::endl;
@@ -1204,7 +1208,7 @@ void checkStorageTM(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vec
 void checkClassStorageTM(std::vector<std::vector<int>>& classSaverYolo, std::vector<int>& detectedFrame)
 {
     //prepare file
-    std::string filePathOF = "TMData_yoloTMMOT_class_IoU0.4_yolotestmp4.csv";
+    std::string filePathOF = "TMData_yoloTMMOT_class_IoU0.1_test300fpsmp4.csv";
     // Open the file for writing
     std::ofstream outputFile(filePathOF);
     if (!outputFile.is_open()) {
@@ -1260,22 +1264,22 @@ void templateMatchingForLeft(cv::Mat1b& img, const int frameIndex, std::vector<c
 {
     // for updating templates
     std::vector<cv::Rect2d> updatedBboxes;
-    updatedBboxes.reserve(100);
+    updatedBboxes.reserve(30);
     std::vector<cv::Mat1b> updatedTemplates;
-    updatedTemplates.reserve(100);
+    updatedTemplates.reserve(30);
     std::vector<int> updatedClasses;
     updatedClasses.reserve(300);
 
     // get Template Matching data
     std::vector<int> classIndexTMLeft;
-    classIndexTMLeft.reserve(300);
+    classIndexTMLeft.reserve(30);
     int numTrackersTM = 0;
     std::vector<cv::Rect2d> bboxesTM;
-    bboxesTM.reserve(100);
+    bboxesTM.reserve(30);
     std::vector<cv::Mat1b> templatesTM;
-    templatesTM.reserve(100);
+    templatesTM.reserve(30);
     std::vector<bool> boolScalesTM;
-    boolScalesTM.reserve(100);   // search area scale
+    boolScalesTM.reserve(30);   // search area scale
     bool boolTrackerTM = false; // whether tracking is successful
 
     /* Template Matching bbox available */
@@ -1301,7 +1305,7 @@ void templateMatchingForLeft(cv::Mat1b& img, const int frameIndex, std::vector<c
     {
         // nothing to do
     }
-    std::cout << "BoolTrackeTM :" << boolTrackerTM << ", boolTrackerYolo : " << boolTrackerYolo << std::endl;
+    std::cout << "BoolTrackerTM :" << boolTrackerTM << ", boolTrackerYolo : " << boolTrackerYolo << std::endl;
     /*  Template Matching Process */
     if (boolTrackerTM || boolTrackerYolo)
     {
@@ -1392,9 +1396,10 @@ void getTemplateMatchingDataLeft(bool& boolTrackerTM, std::vector<int>& classInd
     }
 }
 
-void organizeData(std::vector<bool>& boolScalesTM, bool boolTrackerYolo, std::vector<int>& classIndexTMLeft, std::vector<cv::Mat1b>& templatesTM,
+void organizeData(std::vector<bool>& boolScalesTM, bool& boolTrackerYolo, std::vector<int>& classIndexTMLeft, std::vector<cv::Mat1b>& templatesTM,
     std::vector<cv::Rect2d>& bboxesTM, std::vector<cv::Mat1b>& updatedTemplates,std::vector<cv::Rect2d>& updatedBboxes, std::vector<int>& updatedClasses, int& numTrackersTM)
 {
+    std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
     std::cout << "TM :: Yolo data is available" << std::endl;
     boolTrackerYolo = true;
     if (!boolScalesTM.empty())
@@ -1403,9 +1408,9 @@ void organizeData(std::vector<bool>& boolScalesTM, bool boolTrackerYolo, std::ve
     }
     // get Yolo data
     std::vector<cv::Mat1b> templatesYoloLeft;
-    templatesYoloLeft.reserve(100); // get new data
+    templatesYoloLeft.reserve(10); // get new data
     std::vector<cv::Rect2d> bboxesYoloLeft;
-    bboxesYoloLeft.reserve(100); // get current frame data
+    bboxesYoloLeft.reserve(10); // get current frame data
     std::vector<int> classIndexesYoloLeft;
     classIndexesYoloLeft.reserve(300);
     getYoloDataLeft(templatesYoloLeft, bboxesYoloLeft, classIndexesYoloLeft); // get new frame
@@ -1416,7 +1421,6 @@ void organizeData(std::vector<bool>& boolScalesTM, bool boolTrackerYolo, std::ve
 
 void getYoloDataLeft(std::vector<cv::Mat1b>& newTemplates, std::vector<cv::Rect2d>& newBboxes, std::vector<int>& newClassIndexes)
 {
-    std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
     newTemplates = queueYoloTemplateLeft.front();
     newBboxes = queueYoloBboxLeft.front();
     newClassIndexes = queueYoloClassIndexLeft.front();
@@ -1538,7 +1542,6 @@ void combineYoloTMData(std::vector<int>& classIndexesYoloLeft, std::vector<int>&
 void processTM(std::vector<int>& updatedClasses, std::vector<cv::Mat1b>& updatedTemplates, std::vector<bool>& boolScalesTM, std::vector<cv::Rect2d>& updatedBboxes, cv::Mat1b& img,
     std::vector<cv::Mat1b>& updatedTemplatesTM, std::vector<cv::Rect2d>& updatedBboxesTM, std::vector<int>& updatedClassesTM, std::vector<bool>& updatedSearchScales)
 {
-
     int counterTracker = 0;
     // get bbox from queue for limiting search area
     int leftSearch, topSearch, rightSearch, bottomSearch;
@@ -1588,73 +1591,94 @@ void processTM(std::vector<int>& updatedClasses, std::vector<cv::Mat1b>& updated
             int result_cols = croppedImg.cols - templateImg.cols + 1;
             int result_rows = croppedImg.rows - templateImg.rows + 1;
             std::cout << "result_cols :" << result_cols << ", result_rows:" << result_rows << std::endl;
-
-            result.create(result_rows, result_cols, CV_32FC1); // create result array for matching quality
-            std::cout << "make result cv::Mat" << std::endl;
-            // std::cout << "create result" << std::endl;
-            // const char* trackbar_label = "Method: \n 0: SQDIFF \n 1: SQDIFF NORMED \n 2: TM CCORR \n 3: TM CCORR NORMED \n 4: TM COEFF \n 5: TM COEFF NORMED"; 2 is not so good
-            cv::matchTemplate(croppedImg, templateImg, result, MATCHINGMETHOD); // template Matching
-            std::cout << "finish matchTemplate" << std::endl;
-            // std::cout << "templateMatching" << std::endl;
-            cv::normalize(result, result, 0, 1, cv::NORM_MINMAX, -1, cv::Mat()); // normalize result score between 0 and 1
-            std::cout << "normalization finish" << std::endl;
-            // std::cout << "normalizing" << std::endl;
-            double minVal;    // minimum score
-            double maxVal;    // max score
-            cv::Point minLoc; // minimum score left-top points
-            cv::Point maxLoc; // max score left-top points
-            cv::Point matchLoc;
-
-            cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc, cv::Mat()); // In C++, we should prepare type-defined box for returns, which is usually pointer
-            // std::cout << "minmaxLoc: " << maxVal << std::endl;
-            if (MATCHINGMETHOD == cv::TM_SQDIFF || MATCHINGMETHOD == cv::TM_SQDIFF_NORMED)
+            // template seems to go out of frame 
+            if (result_cols <= 0 || result_rows <= 0)
             {
-                matchLoc = minLoc;
-            }
-            else
-            {
-                matchLoc = maxLoc;
-            }
-
-            // meet matching criteria :: setting bbox
-            // std::cout << "max value : " << maxVal << std::endl;
-            /* find matching object */
-            std::cout << "finish matchin template" << std::endl;
-            if (minVal <= matchingThreshold)
-            {
-                int leftRoi, topRoi, rightRoi, bottomRoi;
-                cv::Mat1b newTemplate;
-                cv::Rect2d roi;
-                // std::cout << "search area limited" << std::endl;
-                //
-                // convert search region coordinate to frame coordinate
-                leftRoi = std::max(0,static_cast<int>(matchLoc.x + leftSearch));
-                topRoi = std::max(0,static_cast<int>(matchLoc.y + topSearch));
-                rightRoi = std::min(img.cols,static_cast<int>(leftRoi + templateImg.cols));
-                bottomRoi = std::min(img.rows,static_cast<int>(topRoi + templateImg.rows));
-                std::cout << "updated template Roi : left=" << leftRoi << ", top =" << topRoi << ", right=" << rightRoi << ", bottom=" << bottomRoi << std::endl;
-                // update roi
-                roi.x = leftRoi;
-                roi.y = topRoi;
-                roi.width = rightRoi - leftRoi;
-                roi.height = bottomRoi - topRoi;
-                // update template image
-                newTemplate = img(roi);
-                std::cout << "new ROI : left=" << roi.x << ", top=" << roi.y << ", width=" << roi.width << ", height=" << roi.height << std::endl;
-                std::cout << "new template size :: width = " << newTemplate.cols << ", height = " << newTemplate.rows << std::endl;
-
-                // update information
-                updatedBboxesTM.push_back(roi);
-                updatedTemplatesTM.push_back(newTemplate);
-                updatedClassesTM.push_back(classIndexTM);
-                updatedSearchScales.push_back(true);
-                counterTracker++;
-            }
-            /* doesn't meet matching criteria */
-            else
-            {
+                std::cout << "template seems to go out from frame" << std::endl;
+                std::cout << "croppedImg :: left=" << leftSearch << ", top=" << topSearch << ", right=" << rightSearch << ", bottom=" << bottomSearch << std::endl;
                 updatedClassesTM.push_back(-1); // tracking fault
                 counterTracker++;
+            }
+            else
+            {
+                result.create(result_rows, result_cols, CV_32FC1); // create result array for matching quality
+                std::cout << "make result cv::Mat" << std::endl;
+                // std::cout << "create result" << std::endl;
+                // const char* trackbar_label = "Method: \n 0: SQDIFF \n 1: SQDIFF NORMED \n 2: TM CCORR \n 3: TM CCORR NORMED \n 4: TM COEFF \n 5: TM COEFF NORMED"; 2 is not so good
+                cv::matchTemplate(croppedImg, templateImg, result, MATCHINGMETHOD); // template Matching
+                std::cout << "finish matchTemplate" << std::endl;
+                // std::cout << "templateMatching" << std::endl;
+                cv::normalize(result, result, 0, 1, cv::NORM_MINMAX, -1, cv::Mat()); // normalize result score between 0 and 1
+                std::cout << "normalization finish" << std::endl;
+                // std::cout << "normalizing" << std::endl;
+                double minVal;    // minimum score
+                double maxVal;    // max score
+                cv::Point minLoc; // minimum score left-top points
+                cv::Point maxLoc; // max score left-top points
+                cv::Point matchLoc;
+
+                cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc, cv::Mat()); // In C++, we should prepare type-defined box for returns, which is usually pointer
+                // std::cout << "minmaxLoc: " << maxVal << std::endl;
+                if (MATCHINGMETHOD == cv::TM_SQDIFF || MATCHINGMETHOD == cv::TM_SQDIFF_NORMED)
+                {
+                    matchLoc = minLoc;
+                }
+                else
+                {
+                    matchLoc = maxLoc;
+                }
+
+                // meet matching criteria :: setting bbox
+                // std::cout << "max value : " << maxVal << std::endl;
+                /* find matching object */
+                std::cout << "finish matchin template" << std::endl;
+                if (minVal <= matchingThreshold)
+                {
+                    int leftRoi, topRoi, rightRoi, bottomRoi;
+                    cv::Mat1b newTemplate;
+                    cv::Rect2d roi;
+                    // std::cout << "search area limited" << std::endl;
+                    //
+                    // convert search region coordinate to frame coordinate
+                    leftRoi = std::max(0, static_cast<int>(matchLoc.x + leftSearch));
+                    topRoi = std::max(0, static_cast<int>(matchLoc.y + topSearch));
+                    rightRoi = std::min(img.cols, static_cast<int>(leftRoi + templateImg.cols));
+                    bottomRoi = std::min(img.rows, static_cast<int>(topRoi + templateImg.rows));
+                    std::cout << "updated template Roi : left=" << leftRoi << ", top =" << topRoi << ", right=" << rightRoi << ", bottom=" << bottomRoi << std::endl;
+                    // update roi
+                    roi.x = leftRoi;
+                    roi.y = topRoi;
+                    roi.width = rightRoi - leftRoi;
+                    roi.height = bottomRoi - topRoi;
+                    /* moving constraints */
+                    if (std::pow((updatedBboxes[counterTracker].x - roi.x), 2) + std::pow((updatedBboxes[counterTracker].y - roi.y), 2) >= 2.0)
+                    {
+                        // update template image
+                        newTemplate = img(roi);
+                        std::cout << "new ROI : left=" << roi.x << ", top=" << roi.y << ", width=" << roi.width << ", height=" << roi.height << std::endl;
+                        std::cout << "new template size :: width = " << newTemplate.cols << ", height = " << newTemplate.rows << std::endl;
+
+                        // update information
+                        updatedBboxesTM.push_back(roi);
+                        updatedTemplatesTM.push_back(newTemplate);
+                        updatedClassesTM.push_back(classIndexTM);
+                        updatedSearchScales.push_back(true);
+                        counterTracker++;
+                    }
+                    /* not moving */
+                    else
+                    {
+                        updatedClassesTM.push_back(-1); // tracking fault
+                        counterTracker++;
+                    }
+                    
+                }
+                /* doesn't meet matching criteria */
+                else
+                {
+                    updatedClassesTM.push_back(-1); // tracking fault
+                    counterTracker++;
+                }
             }
         }
         /* template doesn't exist -> don't do template matching */
