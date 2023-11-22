@@ -5,6 +5,7 @@
 #define GLOBAL_PARAMETERS_H
 
 #include "stdafx.h"
+#include "mosse.h"
 
 // camera : constant setting
 extern const int LEFT_CAMERA = 0;
@@ -15,6 +16,7 @@ extern const int BALL = 0;
 extern const int BOX = 1;
 // tracker
 extern const bool boolMOSSE = true; //Use MOSSE or Template matching
+extern const double threshold_mosse = 5.0;
 /* 3d positioning by stereo camera */
 extern const int BASELINE = 280; // distance between 2 cameras
 /* camera calibration result */
@@ -38,6 +40,12 @@ extern const std::string file_seq_class = "seqData_class_test300fpsmp4.csv";
 // queue definition
 std::queue<cv::Mat1b> queueFrame; // queue for frame
 std::queue<int> queueFrameIndex;  // queue for frame index
+
+//mosse
+std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerYolo_left;
+std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerYolo_right;
+std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerMOSSE_left;
+std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerMOSSE_right;
 
 // left cam
 std::queue<std::vector<cv::Mat1b>> queueYoloTemplateLeft; // queue for yolo template : for real cv::Mat type

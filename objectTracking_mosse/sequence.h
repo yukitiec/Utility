@@ -121,15 +121,18 @@ public:
         //std::cout << "sequence :: last time, num of class = " << numPastClass << std::endl;
         std::vector<int> newClasses;
         /* check every classes */
+        //std::cout << "dataCurrent size=" << dataCurrent.size() << ", data.size()=" << data.size() << std::endl;
         for (const int& classIndexCurrent : classesCurrent)
         {
             //std::cout << "index:" << counterPastClass << ", numPastClass=" << numPastClass << ", classIndex=" << classIndexCurrent << std::endl;
             /* within already classes */
             if (counterPastClass < numPastClass)
             {
+                //std::cout << "within same class" << std::endl;
                 /* new position data found-> add sequence data */
                 if (classIndexCurrent != -1)
                 {
+                    //std::cout << "add new sequential data" << std::endl;
                     data[counterPastTracker].push_back(dataCurrent[counterCurrentTracker]); // add new data in the back of existed data
                     newClasses.push_back(classIndexCurrent);                            // update class list
                     /* revival */
@@ -168,15 +171,17 @@ public:
                     data.push_back({ dataCurrent[counterCurrentTracker] });
                     newClasses.push_back(classIndexCurrent); // add new class
                     counterCurrentTracker++;
-                    //counterPastClass++;
-                    //counterPastTracker++;
+                    counterPastClass++;
+                    counterPastTracker++;
                 }
                 /* if new tracker class is -1, this is awkward */
                 else
                 {
-                    std::cout << "although new tracker, class label is -1. check code and modify" << std::endl;
+                    //std::cout << "although new tracker, class label is -1. check code and modify" << std::endl;
                     newClasses.push_back(-1);
-                    //counterPastClass++;
+                    data.push_back({ {-1,-1,-1,-1} });
+                    counterPastClass++;
+                    counterPastTracker++;
                 }
             }
         }

@@ -10,6 +10,10 @@
 extern std::queue<cv::Mat1b> queueFrame; // queue for frame
 extern std::queue<int> queueFrameIndex;  // queue for frame index
 
+extern std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerYolo_left;
+extern std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerYolo_right;
+extern std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerMOSSE_left;
+extern std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerMOSSE_right;
 
 // left cam
 extern std::queue<std::vector<cv::Mat1b>> queueYoloTemplateLeft; // queue for yolo template : for real cv::Mat type
@@ -165,7 +169,15 @@ void templateMatching() // void*
     detectedFrame.reserve(300);
     std::vector<int> detectedFrameClass;
     detectedFrame.reserve(300);
-
+    //initialization
+    while (!queueTrackerYolo_left.empty())
+        queueTrackerYolo_left.pop();
+    while (!queueTrackerYolo_right.empty())
+        queueTrackerYolo_right.pop();
+    while (!queueTrackerMOSSE_left.empty())
+        queueTrackerMOSSE_left.pop();
+    while (!queueTrackerMOSSE_right.empty())
+        queueTrackerMOSSE_right.pop();
     int countIteration = 0;
     int counterFinish = 0;
     /* sleep for 2 seconds */

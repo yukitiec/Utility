@@ -6,10 +6,15 @@
 
 #include "stdafx.h"
 #include "global_parameters.h"
+#include "mosse.h"
 
 // queue definition
 extern std::queue<cv::Mat1b> queueFrame; // queue for frame
 extern std::queue<int> queueFrameIndex;  // queue for frame index
+
+//mosse
+extern std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerYolo_left;
+extern std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerYolo_right;
 
 // left cam
 extern std::queue<std::vector<cv::Mat1b>> queueYoloTemplateLeft; // queue for yolo template : for real cv::Mat type
@@ -675,10 +680,15 @@ public:
         updatedRoi.reserve(100);
         std::vector<cv::Mat1b> updatedTemplates;
         updatedTemplates.reserve(100);
+        std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>> updatedTrackers;
+        updatedTrackers.reserve(100);
         std::vector<int> updatedClassIndexes;
         updatedClassIndexes.reserve(300);
         /* update data */
-        updateData(existedRoi, newRoi, existedClass, newClass, frame, updatedRoi, updatedTemplates, updatedClassIndexes);
+        //MOSSE
+        if (boolMOSSE) updateData_MOSSE(existedRoi, newRoi, existedClass, newClass, frame, updatedRoi, updatedTrackers, updatedClassIndexes);
+        //Template Matching
+        else updateData(existedRoi, newRoi, existedClass, newClass, frame, updatedRoi, updatedTemplates, updatedClassIndexes);
         /* detection is successful */
         if (!updatedRoi.empty())
         {
@@ -697,9 +707,18 @@ public:
                 queueYoloTemplateLeft.pop();
             if (!queueYoloClassIndexLeft.empty())
                 queueYoloClassIndexLeft.pop();
+            if (!queueTrackerYolo_left.empty())
+                queueTrackerYolo_left.pop();
             /* finish initialization */
             queueYoloBboxLeft.push(updatedRoi);
-            queueYoloTemplateLeft.push(updatedTemplates);
+            //MOSSE
+            if (boolMOSSE)
+            {
+                //std::cout << "Yolo :: updatedTrackers :: size=" << updatedTrackers.size() << std::endl;
+                queueTrackerYolo_left.push(updatedTrackers);
+            }
+            //Template Matching
+            else queueYoloTemplateLeft.push(updatedTemplates);
             queueYoloClassIndexLeft.push(updatedClassIndexes);
             //int numLabels = updatedClassIndexes.size();
             //if (!queueNumLabels.empty())
@@ -793,6 +812,76 @@ public:
         }
     }
 
+    void updateData_MOSSE(std::vector<cv::Rect2d>& existedRoi, std::vector<cv::Rect2d>& newRoi, std::vector<int>& existedClass, std::vector<int>& newClass,
+        cv::Mat1b& frame, std::vector<cv::Rect2d>& updatedRoi, std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>& updatedTrackers,
+        std::vector<int>& updatedClassIndexes)
+    {
+        // std::cout << "updateData function" << std::endl;
+        /* firstly add existed class and ROi*/
+        // std::cout << "Existed class" << std::endl;
+        if (!existedRoi.empty())
+        {
+            /* update bbox and templates */
+            for (cv::Rect2d& roi : existedRoi)
+            {
+                updatedRoi.push_back(roi);
+                cv::Ptr<cv::mytracker::TrackerMOSSE> tracker = cv::mytracker::TrackerMOSSE::create();
+                tracker->init(frame, roi);
+                updatedTrackers.push_back(tracker);
+                //std::cout << "Yolo :: updatedTrackers :: size=" << updatedTrackers.size() << std::endl;
+            }
+            for (const int& classIndex : existedClass)
+            {
+                updatedClassIndexes.push_back(classIndex);
+                // std::cout << classIndex << " ";
+            }
+            // std::cout << std::endl;
+        }
+        else
+        {
+            if (!existedClass.empty())
+            {
+                for (const int& classIndex : existedClass)
+                {
+                    updatedClassIndexes.push_back(classIndex);
+                    // std::cout << classIndex << " ";
+                }
+                // std::cout << std::endl;
+            }
+        }
+        /* secondly add new roi and class */
+        if (!newRoi.empty())
+        {
+            // std::cout << "new detection" << std::endl;
+            for (cv::Rect2d& roi : newRoi)
+            {
+                updatedRoi.push_back(roi);
+                cv::Ptr<cv::mytracker::TrackerMOSSE> tracker = cv::mytracker::TrackerMOSSE::create();
+                tracker->init(frame, roi);
+                updatedTrackers.push_back(tracker);
+                //std::cout << "Yolo :: updatedTrackers :: size=" << updatedTrackers.size() << std::endl;
+            }
+            for (const int& classIndex : newClass)
+            {
+                updatedClassIndexes.push_back(classIndex);
+                // std::cout << classIndex << " ";
+            }
+            // std::cout << std::endl;
+        }
+        else
+        {
+            if (!newClass.empty())
+            {
+                for (const int& classIndex : newClass)
+                {
+                    updatedClassIndexes.push_back(classIndex);
+                    // std::cout << classIndex << " ";
+                }
+                // std::cout << std::endl;
+            }
+        }
+    }
+
     void getLatestDataLeft(std::vector<cv::Rect2d>& bboxes, std::vector<int>& classes)
     {
         // std::unique_lock<std::mutex> lock(mtxTMLeft); // Lock the mutex
@@ -819,10 +908,11 @@ public:
             classes = queueTMClassIndexLeft.front();
             if (!queueTMBboxLeft.empty()) bboxes = queueTMBboxLeft.front(); // get new yolodata : {{x,y.width,height},...}
             /* for debug */
-            std::cout << ":: Left :: latest data " << std::endl;
+            /*std::cout << ":: Left :: latest data " << std::endl;
             for (const int& label : classes)
                 std::cout << label << " ";
             std::cout << std::endl;
+            */
         }
     }
 };

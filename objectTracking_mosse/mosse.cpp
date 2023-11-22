@@ -166,7 +166,7 @@ double TrackerMOSSE::update(const Mat& image, Rect2d& boundingBox, bool transpor
     // update location
     center.x += delta_xy.x;
     center.y += delta_xy.y;
-    std::cout << "deltaX=" << delta_xy.x << ", deltaY=" << delta_xy.y << std::endl;
+    //std::cout << "deltaX=" << delta_xy.x << ", deltaY=" << delta_xy.y << std::endl;
 
     Mat img_sub_new;
     getRectSubPix(image, size, center, img_sub_new);
