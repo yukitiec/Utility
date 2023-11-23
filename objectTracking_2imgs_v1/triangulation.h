@@ -8,8 +8,9 @@
 #include "utility.h"
 
 /*3D position*/
-extern std::queue<std::vector<std::vector<std::vector<int>>>> queueTriangulation_left;
-extern std::queue<std::vector<std::vector<std::vector<int>>>> queueTriangulation_right;
+std::queue<bool> queueStartYolo_left; //if new Yolo inference can start
+extern std::queue<std::vector<int>> queueUpdateLabels_left;
+extern std::queue<std::vector<int>> queueUpdateLabels_right;
 
 /* 3D triangulation */
 extern const int BASELINE; // distance between 2 cameras
