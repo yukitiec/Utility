@@ -72,7 +72,10 @@ public:
                 }
                 classesLeft.push_back(newClasses);
                 //new data added
-                if (!dataCurrentLeft.empty()) queueUpdateLabels_left.push(newClasses); //updated class labels for letting matching.h match data in both images
+                if (!dataCurrentLeft.empty()) 
+                { 
+                    if (!queueUpdateLabels_left.empty()) queueUpdateLabels_left.pop();
+                    queueUpdateLabels_left.push(newClasses); //updated class labels for letting matching.h match data in both images
             }
         }
         /* data isn't available */
