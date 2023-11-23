@@ -60,7 +60,8 @@ std::queue<std::vector<int>> queueTMClassIndexLeft;       // queue for class ind
 std::queue<std::vector<bool>> queueTMScalesLeft;          // queue for search area scale
 std::queue<bool> queueLabelUpdateLeft;                    // for updating labels of sequence data
 //std::queue<int> queueNumLabels;                           // current labels number -> for maintaining label number consistency
-std::queue<bool> queueStartYolo; //if new Yolo inference can start
+std::queue<bool> queueStartYolo_left; //if new Yolo inference can start
+std::queue<bool> queueStartYolo_right; //if new Yolo inference can start
 
 // right cam
 std::queue<std::vector<cv::Mat1b>> queueYoloTemplateRight; // queue for yolo template : for real cv::Mat type
@@ -73,11 +74,15 @@ std::queue<std::vector<bool>> queueTMScalesRight;          // queue for search a
 std::queue<bool> queueLabelUpdateRight;                    // for updating labels of sequence data
 
 // 3D positioning ~ trajectory prediction
-std::queue<int> queueTargetFrameIndex;                      // TM estimation frame
+std::vector<std::vector<std::vector<int>>> seqData_left,seqData_right; //storage for sequential data
+std::queue<int> queueTargetFrameIndex_left;                      // TM estimation frame
+std::queue<int> queueTargetFrameIndex_right;                      // TM estimation frame
 std::queue<std::vector<cv::Rect2d>> queueTargetBboxesLeft;  // bboxes from template matching for predict objects' trajectory
 std::queue<std::vector<cv::Rect2d>> queueTargetBboxesRight; // bboxes from template matching for predict objects' trajectory
 std::queue<std::vector<int>> queueTargetClassIndexesLeft;   // class from template matching for maintain consistency
 std::queue<std::vector<int>> queueTargetClassIndexesRight;  // class from template matching for maintain consistency
+
+//mutex
 std::mutex mtxImg, mtxYoloLeft, mtxTMLeft, mtxTarget; // define mutex
 
 
