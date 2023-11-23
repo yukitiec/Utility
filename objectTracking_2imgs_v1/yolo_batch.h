@@ -26,7 +26,8 @@ extern std::queue<std::vector<int>> queueTMClassIndexLeft;       // queue for cl
 extern std::queue<std::vector<bool>> queueTMScalesLeft;          // queue for search area scale
 extern std::queue<bool> queueLabelUpdateLeft;                    // for updating labels of sequence data
 //std::queue<int> queueNumLabels;                           // current labels number -> for maintaining label number consistency
-extern std::queue<bool> queueStartYolo; //if new Yolo inference can start
+extern std::queue<bool> queueStartYolo_left; //if new Yolo inference can start
+extern std::queue<bool> queueStartYolo_right; //if new Yolo inference can start
 
 // right cam
 extern std::queue<std::vector<cv::Mat1b>> queueYoloTemplateRight; // queue for yolo template : for real cv::Mat type
@@ -54,9 +55,10 @@ private:
     torch::Device* device;
 
     std::string yolofilePath = "yolov8m.torchscript";
-    int frameWidth = 320;
-    int frameHeight = 320;
-    const int yoloWidth = 320;
+    const int originalWidth = 320;
+    const int frameWidth = 640;
+    const int frameHeight = 320;
+    const int yoloWidth = 640;
     const int yoloHeight = 320;
     const cv::Size YOLOSize{ yoloWidth, yoloHeight };
     const float IoUThreshold = 0.4;
@@ -98,7 +100,9 @@ public:
     };
     ~YOLODetect() { delete device; }; // Deconstructor
 
-    void detectLeft(cv::Mat1b& frame, const int frameIndex, std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver, std::vector<int>& detectedFrame, std::vector<int>& detectedFrameClass, int counterIteration)
+    void detect(cv::Mat1b& frame, const int frameIndex, std::vector<std::vector<cv::Rect2d>>& posSaver_left,std::vector<std::vector<cv::Rect2d>>& posSaver_right, 
+                std::vector<std::vector<int>>& classSaver_left,std::vector<std::vector<int>>& classSaver_right, 
+                std::vector<int>& detectedFrame_left, std::vector<int>& detectedFrame_right, std::vector<int>& detectedFrameClass_left, std::vector<int>& detectedFrameClass_right, int counterIteration)
     {
         /* inference by YOLO
          *  Args:
@@ -114,11 +118,11 @@ public:
         preprocessImg(frame, imgTensor);
         // std::cout << "finish preprocess" << std::endl;
         /* get latest data */
-        std::vector<cv::Rect2d> bboxesCandidateTMLeft; // for limiting detection area
-        std::vector<int> classIndexesTMLeft;
-        if (!queueTMClassIndexLeft.empty() || counterIteration >= 3)
+        std::vector<cv::Rect2d> bboxesCandidateTMLeft,bboxesCandidateTMRight; // for limiting detection area
+        std::vector<int> classIndexesTMLeft,classIndexesTMRight;
+        if (!queueTMClassIndexLeft.empty() || !queueTMClassIndexRight.empty() || counterIteration >= 3)
         {
-            getLatestDataLeft(bboxesCandidateTMLeft, classIndexesTMLeft); // get latest data
+            getLatestDataLeft(bboxesCandidateTMLeft,bboxesCandidateTMRight ,classIndexesTMLeft,classIndexesTMRight); // get latest data
         }
         // std::cout << imgTensor.sizes() << std::endl;
         /* inference */
@@ -132,23 +136,18 @@ public:
         // auto stop = std::chrono::high_resolution_clock::now();
         // auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
         // std::cout << "Time taken by Yolo inference: " << duration.count() << " milliseconds" << std::endl;
-        //  std::cout << "finish inference" << std::endl;
-        //  candidate class from TM
-        /* get latest data from Template Matching */
         /* postProcess */
-        // std::cout << "post process" << std::endl;
         preds = preds.permute({ 0, 2, 1 }); // change order : (1,6,2100) -> (1,2100,6)
-        // std::cout << "permute" << std::endl;
-        // std::cout << "preds size : " << preds.sizes() << std::endl;
-        std::vector<torch::Tensor> detectedBoxes0Left, detectedBoxes1Left; //(n,6),(m,6)
-        non_max_suppression2(preds, detectedBoxes0Left, detectedBoxes1Left, ConfThreshold, IoUThreshold);
+        std::vector<torch::Tensor> detectedBoxes0, detectedBoxes1; //(n,6),(m,6) :: including both left and right objects
+        non_max_suppression2(preds, detectedBoxes0, detectedBoxes1);
 
         // std::cout << "BBOX for Ball : " << detectedBoxes0Left.size() << " BBOX for BOX : " << detectedBoxes1Left.size() << std::endl;
-        std::vector<cv::Rect2d> existedRoi, newRoi;
-        std::vector<int> existedClass, newClass;
+        std::vector<cv::Rect2d> existedRoi_left,existedRoi_right, newRoi_left, newRoi_right;
+        std::vector<int> existedClass_left,existedClass_right, newClass_left,newClass_right;
         /* Roi Setting : take care of dealing with TM data */
         /* ROI and class index management */
-        roiSetting(detectedBoxes0Left, existedRoi, existedClass, newRoi, newClass, BALL, bboxesCandidateTMLeft, classIndexesTMLeft);
+        roiSetting(detectedBoxes0, existedRoi_left, existedClass_left, newRoi_left, newClass_left,existedRoi_right, existedClass_right, newRoi_right, newClass_right, BALL, 
+                    bboxesCandidateTMLeft, classIndexesTMLeft,bboxesCandidateTMRight, classIndexesTMRight); //separate detection into left and right
         /*if (!existedClass.empty())
         {
             std::cout << "existed class after roisetting of Ball:" << std::endl;
@@ -159,7 +158,8 @@ public:
             std::cout << std::endl;
         }
         */
-        roiSetting(detectedBoxes1Left, existedRoi, existedClass, newRoi, newClass, BOX, bboxesCandidateTMLeft, existedClass);
+        roiSetting(detectedBoxes1, existedRoi_left, existedClass_left, newRoi_left, newClass_left,existedRoi_right, existedClass_right, newRoi_right, newClass_right, BOX,
+                    bboxesCandidateTMLeft, classIndexesTMLeft,bboxesCandidateTMRight, classIndexesTMRight);
         /* in Ball roisetting update all classIndexesTMLeft to existedClass, so here adapt existedClass as a reference class */
         /*if (!existedClass.empty())
         {
@@ -171,7 +171,11 @@ public:
             std::cout << std::endl;
         }*/
         /* push and save data */
-        push2QueueLeft(existedRoi, newRoi, existedClass, newClass, frame, posSaver, classSaver, frameIndex, detectedFrame, detectedFrameClass);
+        push2Queue(existedRoi_left, newRoi_left, existedClass_left, newClass_left, frame, posSaver_left, classSaver_left, frameIndex, detectedFrame_left, detectedFrameClass_left, 
+                        queueYoloClassIndexLeft, queueYoloBboxLeft, queueYoloTemplateLeft,queueTrackerYolo_left);
+        push2QueueLeft(existedRoi_right, newRoi_right, existedClass_right, newClass_right, frame, posSaver_right, classSaver_right, frameIndex, detectedFrame_right, detectedFrameClass_right, 
+                        queueYoloClassIndexRight, queueYoloBboxRight, queueYoloTemplateRight,queueTrackerYolo_right);
+);
     }
 
     void preprocessImg(cv::Mat1b& frame, torch::Tensor& imgTensor)
@@ -188,7 +192,60 @@ public:
         imgTensor = imgTensor.to(*device);                                                         // transport data to GPU
     }
 
-    void non_max_suppression2(torch::Tensor& prediction, std::vector<torch::Tensor>& detectedBoxes0, std::vector<torch::Tensor>& detectedBoxes1, float confThreshold, float iouThreshold)
+    void getLatestDataLeft(std::vector<cv::Rect2d>& bboxes_left,std::vector<cv::Rect2d>& bboxes_right, std::vector<int>& classes_left,std::vector<int>& classes_right)
+    {
+        // std::unique_lock<std::mutex> lock(mtxTMLeft); // Lock the mutex
+        /* still didn't synchronize -> wait for next data */
+        /* getting iteratively until TM class labels are synchronized with Yolo data */
+        bool boolLeft = false;
+        bool boolRight = false;
+        while (true) // >(greater than for first exchange between Yolo and TM)
+        {
+            if (boolLeft && boolRight)
+            {
+                std::cout<<"start yolo inference"<<std::endl;
+                break;
+            }
+            if (!queueStartYolo_left.empty())
+            {
+                bool start = queueStartYolo.front();
+                queueStartYolo.pop();
+                if (start) boolLeft = true;
+            }
+            if (!queueStartYolo_right.empty())
+            {
+                bool start =queueStartYolo_right.front();
+                queueStartYolo_right.pop();
+                if (start) boolRight = true;
+            }   
+        }
+
+        // std::cout << "Left Img : Yolo bbox available from TM " << std::endl;
+        if (!queueTMClassIndexLeft.empty())
+        {
+            classes_left = queueTMClassIndexLeft.front();
+            if (!queueTMBboxLeft.empty()) bboxes_left = queueTMBboxLeft.front(); // get new yolodata : {{x,y.width,height},...}
+            /* for debug */
+            /*std::cout << ":: Left :: latest data " << std::endl;
+            for (const int& label : classes)
+                std::cout << label << " ";
+            std::cout << std::endl;
+            */
+        }
+        if (!queueTMClassIndexRight.empty())
+        {
+            classes_right = queueTMClassIndexRight.front();
+            if (!queueTMBboxRight.empty()) bboxes_right = queueTMBboxRight.front(); // get new yolodata : {{x,y.width,height},...}
+            /* for debug */
+            /*std::cout << ":: Right :: latest data " << std::endl;
+            for (const int& label : classes_right)
+                std::cout << label << " ";
+            std::cout << std::endl;
+            */
+        }
+    }
+
+    void non_max_suppression2(torch::Tensor& prediction, std::vector<torch::Tensor>& detectedBoxes0, std::vector<torch::Tensor>& detectedBoxes1)
     {
         /* non max suppression : remove overlapped bbox
          * Args:
@@ -329,8 +386,10 @@ public:
         return 0.0f; // No overlap
     }
 
-    void roiSetting(std::vector<torch::Tensor>& detectedBoxes, std::vector<cv::Rect2d>& existedRoi, std::vector<int>& existedClass, std::vector<cv::Rect2d>& newRoi, std::vector<int>& newClass,
-        int candidateIndex, std::vector<cv::Rect2d>& bboxesCandidate, std::vector<int>& classIndexesTM)
+    void roiSetting(std::vector<torch::Tensor>& detectedBoxes, std::vector<cv::Rect2d>& existedRoi_left, std::vector<int>& existedClass_left, std::vector<cv::Rect2d>& newRoi_left, std::vector<int>& newClass_left,
+                    std::vector<cv::Rect2d>& existedRoi_right, std::vector<int>& existedClass_right, std::vector<cv::Rect2d>& newRoi_right, std::vector<int>& newClass_right,
+                    int candidateIndex, 
+                    std::vector<cv::Rect2d>& bboxesCandidate_left, std::vector<int>& classIndexesTM_left, std::vector<cv::Rect2d>& bboxesCandidate_right, std::vector<int>& classIndexesTM_right)
     {
         /*
          * Get current data before YOLO inference started.
@@ -345,27 +404,18 @@ public:
         {
             // std::cout << "yolo detection exists" << std::endl;
             /* some trackers exist */
-            if (!classIndexesTM.empty())
+            if (!classIndexesTM_left.empty() || !classIndexesTM_right.empty())
             {
-                // std::cout << "template matching succeeded" << std::endl;
                 /* constant setting */
-                std::vector<cv::Rect2d> bboxesYolo; // for storing cv::Rect2d
+                std::vector<cv::Rect2d> bboxesYolo_left, bboxesYolo_right; // for storing cv::Rect2d
                 /* start comparison Yolo and TM data -> search for existed tracker */
-                // std::cout << "start comparison of YOLO and TM" << std::endl;
-                comparisonTMYolo(detectedBoxes, classIndexesTM, candidateIndex, bboxesCandidate, bboxesYolo, existedRoi, existedClass);
-                /* finish comparison */
-                // std::cout << "finish comparison with yolo " << std::endl;
+                comparisonTMYolo(detectedBoxes, candidateIndex, bboxesYolo_left, bboxesYolo_right, classIndexesTM_left,classIndexesTM_right, bboxesCandidate_left,bboxesCandidate_right, 
+                                existedRoi_left, existedClass_left,, existedRoi_right, existedClass_right);
                 /* deal with new trackers */
-                int numNewDetection = bboxesYolo.size(); // number of new detections
-                /* if there is a new detection */
-                if (numNewDetection != 0)
-                {
-                    for (int i = 0; i < numNewDetection; i++)
-                    {
-                        newRoi.push_back(bboxesYolo[i]);
-                        newClass.push_back(candidateIndex);
-                    }
-                }
+                //left
+                void newDetection(bboxesYolo_left,newRoi_left,newClass_left);
+                //right
+                void newDetection(bboxesYolo_right,newRoi_right,newClass_right);
             }
             /* No TM tracker exist */
             else
@@ -376,8 +426,9 @@ public:
                 cv::Rect2d roi;
 
                 /* convert torch::Tensor to cv::Rect2d */
-                std::vector<cv::Rect2d> bboxesYolo;
-                bboxesYolo.reserve(100);
+                std::vector<cv::Rect2d> bboxesYolo_left,bboxesYolo_right;
+                bboxesYolo_left.reserve(25);
+                bboxesYolo_right.reserve(25);
                 for (int i = 0; i < numBboxes; ++i)
                 {
                     float expandrate[2] = { static_cast<float>(frameWidth) / static_cast<float>(yoloWidth), static_cast<float>(frameHeight) / static_cast<float>(yoloHeight) }; // resize bbox to fit original img size
@@ -386,89 +437,26 @@ public:
                     top = static_cast<int>(detectedBoxes[i][1].item().toFloat() * expandrate[1]);
                     right = static_cast<int>(detectedBoxes[i][2].item().toFloat() * expandrate[0]);
                     bottom = static_cast<int>(detectedBoxes[i][3].item().toFloat() * expandrate[1]);
-                    newRoi.emplace_back(left, top, (right - left), (bottom - top));
-                    newClass.push_back(candidateIndex);
+                    //left
+                    if (left<=originalWidth)
+                    {
+                        newRoi_left.emplace_back(left, top, (right - left), (bottom - top));
+                        newClass_left.push_back(candidateIndex);
+                    }
+                    //right
+                    else
+                    {
+                        newRoi_right.emplace_back(left-originalWidth,top,(right-left),(bottom-top));
+                        newClass_right.push_back(candidateIndex);
+                    }
                 }
             }
         }
         /* No object detected in Yolo -> return -1 class label */
         else
         {
-            // std::cout << "yolo detection doesn't exist" << std::endl;
-            /* some TM trackers exist */
-            /* if class label is equal to 0, return -1 if existed label == 0 or -1 and return the same label if classIndex is otherwise*/
-            if (candidateIndex == 0)
-            {
-                if (!classIndexesTM.empty())
-                {
-                    int counterCandidate = 0;
-                    int counterIteration = 0;
-                    for (const int& classIndex : classIndexesTM)
-                    {
-                        /* if same label -> failed to track in YOLO  */
-                        if (classIndex == candidateIndex)
-                        {
-                            existedClass.push_back(-1);
-                            if (!bboxesCandidate.empty())
-                            {
-                                bboxesCandidate.erase(bboxesCandidate.begin() + counterCandidate); // erase existed roi to maintain roi order
-                            }
-                        }
-                        /* else classIndex != candidateIndex */
-                        else if (classIndex != candidateIndex && classIndex != -1)
-                        {
-                            existedClass.push_back(classIndex);
-                            counterCandidate++;
-                        }
-                        /* else classIndex != candidateIndex */
-                        else if (classIndex == -1)
-                        {
-                            existedClass.push_back(-1);
-                        }
-                    }
-                }
-                /* No TM tracker */
-                else
-                {
-                    // std::cout << "No Detection , no tracker" << std::endl;
-                    /* No detection ,no trackers -> Nothing to do */
-                }
-            }
-            /* if candidateIndex is other than 0 */
-            else
-            {
-                if (!existedClass.empty())
-                {
-                    int counterCandidate = 0;
-                    int counterIteration = 0;
-                    for (const int& classIndex : existedClass)
-                    {
-                        // std::cout << "bboxesCandidate size = " << bboxesCandidate.size() << std::endl;
-                        // std::cout << "counterCandidate=" << counterCandidate << std::endl;
-                        /* if same label -> failed to track in YOLO  */
-                        if (classIndex == candidateIndex)
-                        {
-                            existedClass.at(counterIteration) = -1;
-                            if (!bboxesCandidate.empty())
-                            {
-                                bboxesCandidate.erase(bboxesCandidate.begin() + counterCandidate);
-                            }
-                        }
-                        /* if classIndex is greater than candidateIndex -> keep bbox*/
-                        else if (candidateIndex < classIndex)
-                        {
-                            counterCandidate++;
-                        }
-                        counterIteration++;
-                    }
-                }
-                /* No TM tracker */
-                else
-                {
-                    // std::cout << "No Detection , no tracker" << std::endl;
-                    /* No detection ,no trackers -> Nothing to do */
-                }
-            }
+            noYoloDetect(candidateIndex,bboxesCandidate_left, classIndexesTM_left, existedClass_left);
+            noYoloDetect(candidateIndex,bboxesCandidate_right, classIndexesTM_right, existedClass_right);
         }
     }
 
@@ -492,9 +480,10 @@ public:
         return 0.0f; // No overlap
     }
 
-    void comparisonTMYolo(std::vector<torch::Tensor>& detectedBoxes, std::vector<int>& classIndexesTM, int& candidateIndex,
-        std::vector<cv::Rect2d>& bboxesCandidate, std::vector<cv::Rect2d>& bboxesYolo,
-        std::vector<cv::Rect2d>& existedRoi, std::vector<int>& existedClass)
+    void comparisonTMYolo(std::vector<torch::Tensor>& detectedBoxes, int& candidateIndex, std::vector<cv::Rect2d>& bboxesYolo_left, std::vector<cv::Rect2d>& bboxesYolo_right,
+                            std::vector<int>& classIndexesTM_left, std::vector<int>& classIndexesTM_right, 
+                            std::vector<cv::Rect2d>& bboxesCandidate_left, std::vector<cv::Rect2d>& bboxesCandidate_right, 
+                            std::vector<cv::Rect2d>& existedRoi_left, std::vector<int>& existedClass_left,std::vector<cv::Rect2d>& existedRoi_right, std::vector<int>& existedClass_right)
     {
         /* constant setting */
         int numBboxes = detectedBoxes.size(); // num of detection
@@ -513,19 +502,28 @@ public:
             top = static_cast<int>(detectedBoxes[i][1].item().toFloat() * expandrate[1]);
             right = static_cast<int>(detectedBoxes[i][2].item().toFloat() * expandrate[0]);
             bottom = static_cast<int>(detectedBoxes[i][3].item().toFloat() * expandrate[1]);
-            bboxesYolo.emplace_back(left, top, (right - left), (bottom - top));
+            //left image
+            if (left<=originalWidth) bboxesYolo_left.emplace_back(left, top, (right - left), (bottom - top));
+            //right image
+            else (left>originalWidth) bboxesYolo_right.emplace_back(left-originalWidth,top,(right-left), (bottom-top));
         }
         // std::cout << "finish converting torch::Tensor to cv::Rect2d" << std::endl;
 
         /*  compare detected bbox and TM bbox  */
-        float max = IoUThresholdIdentity;      // set max value as threshold for lessening process volume
-        bool boolIdentity = false;             // if found the tracker
-        int indexMatch = 0;                    // index match
         std::vector<cv::Rect2d> newDetections; // for storing newDetection
 
         /* start comparison */
         /* if found same things : push_back detected template and classIndex, else: make sure that push_back only -1 */
         // std::cout << "classIndexesTM size" << classIndexesTM.size() << std::endl;
+        //left
+        if (!classIndexesTM_left.empty()) matchingTracker(candidateIndex, bboxesCandidate_left, classIndexesTM_left,bboxesYolo_left,existedRoi_left,existedClass_left);
+        if (!classIndexesTM_right.empty()) matchingTracker(candidateIndex, bboxesCandidate_right, classIndexesTM_right,bboxesYolo_right,existedRoi_right,existedClass_right);
+    }
+
+    void matchingTracker(int& candidateIndex, std::vector<cv::Rect2d>& bboxesCandidate, std::vector<int>& classIndexesTM,std::vector<cv::Rect2d>& bboxesYolo,std::vector<cv::Rect2d>& existedRoi,std::vector<int>& existedClass)
+    {
+        float max = IoUThresholdIdentity;      // set max value as threshold for lessening process volume
+        int indexMatch = 0;                    // index match
         int counterCandidateTM = 0; // number of candidate bbox
         // std::cout << "Comparison of TM and YOLO :: CandidateIndex:" << candidateIndex << std::endl;
         /* there is classes in TM trackeing */
@@ -533,7 +531,6 @@ public:
         /*iterate for each clssIndexes of TM */
         for (const int classIndex : classIndexesTM)
         {
-
             /* bboxes Yolo still exist */
             if (!bboxesYolo.empty())
             {
@@ -668,10 +665,102 @@ public:
         }
     }
 
-    void push2QueueLeft(std::vector<cv::Rect2d>& existedRoi, std::vector<cv::Rect2d>& newRoi,
+    void newDetection(std::vector<cv::Rect2d>& bboxesYolo,std::vector<cv::Rect2d>& newRoi,std::vector<int>& newClass)
+    {
+        int numNewDetection = bboxesYolo.size(); // number of new detections
+        /* if there is a new detection */
+        if (numNewDetection != 0)
+        {
+            for (int i = 0; i < numNewDetection; i++)
+            {
+                newRoi.push_back(bboxesYolo[i]);
+                newClass.push_back(candidateIndex);
+            }
+        }
+    }
+
+    void noYoloDetect(int& candidateIndex,std::vector<cv::Rect2d>& bboxesCandidate, std::vector<int>& classIndexesTM, std::vector<int>& existedClass)
+    {
+        if (candidateIndex == 0)
+        {
+            if (!classIndexesTM.empty())
+            {
+                int counterCandidate = 0;
+                for (const int& classIndex : classIndexesTM)
+                {
+                    /* if same label -> failed to track in YOLO  */
+                    if (classIndex == candidateIndex)
+                    {
+                        existedClass.push_back(-1);
+                        if (!bboxesCandidate.empty())
+                        {
+                            bboxesCandidate.erase(bboxesCandidate.begin() + counterCandidate); // erase existed roi to maintain roi order
+                        }
+                    }
+                    /* else classIndex != candidateIndex */
+                    else if (classIndex != candidateIndex && classIndex != -1)
+                    {
+                        existedClass.push_back(classIndex);
+                        counterCandidate++;
+                    }
+                    /* else classIndex != candidateIndex */
+                    else if (classIndex == -1)
+                    {
+                        existedClass.push_back(-1);
+                    }
+                }
+            }
+            /* No TM tracker */
+            else
+            {
+                // std::cout << "No Detection , no tracker" << std::endl;
+                /* No detection ,no trackers -> Nothing to do */
+            }
+        }
+        /* if candidateIndex is other than 0 */
+        else
+        {
+            if (!existedClass.empty())
+            {
+                int counterCandidate = 0;
+                int counterIteration = 0;
+                for (const int& classIndex : existedClass)
+                {
+                    // std::cout << "bboxesCandidate size = " << bboxesCandidate.size() << std::endl;
+                    // std::cout << "counterCandidate=" << counterCandidate << std::endl;
+                    /* if same label -> failed to track in YOLO  */
+                    if (classIndex == candidateIndex)
+                    {
+                        existedClass.at(counterIteration) = -1;
+                        if (!bboxesCandidate.empty())
+                        {
+                            bboxesCandidate.erase(bboxesCandidate.begin() + counterCandidate);
+                        }
+                    }
+                    /* if classIndex is greater than candidateIndex -> keep bbox*/
+                    else if (candidateIndex < classIndex)
+                    {
+                        counterCandidate++;
+                    }
+                    counterIteration++;
+                }
+            }
+            /* No TM tracker */
+            else
+            {
+                // std::cout << "No Detection , no tracker" << std::endl;
+                /* No detection ,no trackers -> Nothing to do */
+            }
+        }
+    }
+
+    void push2Queue(std::vector<cv::Rect2d>& existedRoi, std::vector<cv::Rect2d>& newRoi,
         std::vector<int>& existedClass, std::vector<int>& newClass, cv::Mat1b& frame,
         std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver,
-        const int& frameIndex, std::vector<int>& detectedFrame, std::vector<int>& detectedFrameClass)
+        const int& frameIndex, std::vector<int>& detectedFrame, std::vector<int>& detectedFrameClass,
+        std::queue<std::vector<int>>& queueYoloClassIndexLeft,std::queue<std::vector<cv::Rect2d>>& queueYoloBboxLeft,
+        std::queue<std::vector<cv::Mat1b>>& queueYoloTemplateLeft,std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>>& queueTrackerYolo_left      
+        )
     {
         /*
          * push detection data to queueLeft
@@ -720,10 +809,6 @@ public:
             //Template Matching
             else queueYoloTemplateLeft.push(updatedTemplates);
             queueYoloClassIndexLeft.push(updatedClassIndexes);
-            //int numLabels = updatedClassIndexes.size();
-            //if (!queueNumLabels.empty())
-            //    queueNumLabels.pop();
-            //queueNumLabels.push(numLabels);
         }
         /* no object detected -> return class label -1 if TM tracker exists */
         else
@@ -879,40 +964,6 @@ public:
                 }
                 // std::cout << std::endl;
             }
-        }
-    }
-
-    void getLatestDataLeft(std::vector<cv::Rect2d>& bboxes, std::vector<int>& classes)
-    {
-        // std::unique_lock<std::mutex> lock(mtxTMLeft); // Lock the mutex
-        /* still didn't synchronize -> wait for next data */
-        /* getting iteratively until TM class labels are synchronized with Yolo data */
-        while (true) // >(greater than for first exchange between Yolo and TM)
-        {
-            if (!queueStartYolo.empty())
-            {
-                bool start = queueStartYolo.front();
-                queueStartYolo.pop();
-                if (start)
-                {
-                    std::cout << "start yolo inference" << std::endl;
-                    break;
-                }
-            }
-            //std::cout << "wait for new TM data" << std::endl;
-        }
-
-        // std::cout << "Left Img : Yolo bbox available from TM " << std::endl;
-        if (!queueTMClassIndexLeft.empty())
-        {
-            classes = queueTMClassIndexLeft.front();
-            if (!queueTMBboxLeft.empty()) bboxes = queueTMBboxLeft.front(); // get new yolodata : {{x,y.width,height},...}
-            /* for debug */
-            /*std::cout << ":: Left :: latest data " << std::endl;
-            for (const int& label : classes)
-                std::cout << label << " ";
-            std::cout << std::endl;
-            */
         }
     }
 };
