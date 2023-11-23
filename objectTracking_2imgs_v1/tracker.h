@@ -79,7 +79,7 @@ public:
     }
 
     /* Template Matching :: Left */
-    void templateMatching(cv::Mat1b& img, const int& frameIndex, std::vector<cv::Mat1b>& templateImgs,
+    void templateMatching(cv::Mat1b& img, const int& frameIndex, 
         std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver, std::vector<int>& detectedFrame, std::vector<int>& detectedFrameClass,
         std::queue<std::vector<int>>& queueTMClassIndexLeft, std::queue<std::vector<cv::Rect2d>>& queueTMBboxLeft,
         std::queue<std::vector<cv::Mat1b>>& queueTMTemplateLeft,std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>& queueTrackerMOSSE_left, std::queue<std::vector<bool>>& queueTMScalesLeft,
