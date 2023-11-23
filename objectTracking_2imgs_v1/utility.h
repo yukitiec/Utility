@@ -39,11 +39,11 @@ public:
         return false;
     }
 
-    void checkStorage(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vector<int>& detectedFrame)
+    void checkStorage(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vector<int>& detectedFrame,std::string& fileName)
     {
 
         // Open the file for writing
-        std::ofstream outputFile(file_yolo_bbox);
+        std::ofstream outputFile(fileName);
         if (!outputFile.is_open())
         {
             std::cerr << "Error: Could not open the file." << std::endl;
@@ -77,10 +77,10 @@ public:
         outputFile.close();
     }
 
-    void checkClassStorage(std::vector<std::vector<int>>& classSaverYolo, std::vector<int>& detectedFrame)
+    void checkClassStorage(std::vector<std::vector<int>>& classSaverYolo, std::vector<int>& detectedFrame,std::string& fileName)
     {
         // Open the file for writing
-        std::ofstream outputFile(file_yolo_class);
+        std::ofstream outputFile(fileName);
         if (!outputFile.is_open())
         {
             std::cerr << "Error: Could not open the file." << std::endl;
@@ -111,10 +111,10 @@ public:
         outputFile.close();
     }
 
-    void checkStorageTM(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vector<int>& detectedFrame)
+    void checkStorageTM(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vector<int>& detectedFrame,std::string& fileName)
     {
         // Open the file for writing
-        std::ofstream outputFile(file_tm_bbox);
+        std::ofstream outputFile(fileName);
         if (!outputFile.is_open())
         {
             std::cerr << "Error: Could not open the file." << std::endl;
@@ -148,10 +148,10 @@ public:
         outputFile.close();
     }
 
-    void checkClassStorageTM(std::vector<std::vector<int>>& classSaverYolo, std::vector<int>& detectedFrame)
+    void checkClassStorageTM(std::vector<std::vector<int>>& classSaverYolo, std::vector<int>& detectedFrame,std::string& fileName)
     {
         // Open the file for writing
-        std::ofstream outputFile(file_tm_class);
+        std::ofstream outputFile(fileName);
         if (!outputFile.is_open())
         {
             std::cerr << "Error: Could not open the file." << std::endl;
@@ -179,11 +179,11 @@ public:
         outputFile.close();
     }
 
-    void checkSeqData(std::vector<std::vector<std::vector<int>>>& dataLeft, std::vector<std::vector<int>>& classesLeft)
+    void checkSeqData(std::vector<std::vector<std::vector<int>>>& dataLeft, std::vector<std::vector<int>>& classesLeft,std::string& fileName)
     {
         // Open the file for writing
         /* bbox data */
-        std::ofstream outputFile(file_seq_bbox);
+        std::ofstream outputFile(fileName);
         std::vector<int> frameIndexes;
         frameIndexes.reserve(2000);
         if (!outputFile.is_open())
