@@ -180,16 +180,14 @@ void yoloDetect()
     std::cout << "position saver : Yolo : " << std::endl;
     std::cout << " : Left : " << std::endl;
     std::cout << "posSaverYoloLeft size:" << posSaverYoloLeft.size() << ", detectedFrame size:" << detectedFrameLeft.size() << std::endl;
-    utYolo.checkStorage(posSaverYoloLeft, detectedFrameLeft);
-    std::cout << " : Left : " << std::endl;
+    utYolo.checkStorage(posSaverYoloLeft, detectedFrameLeft,file_yolo_bbox_left);
     std::cout << "classSaverYoloLeft size:" << classSaverYoloLeft.size() << ", detectedFrameClass size:" << detectedFrameClassLeft.size() << std::endl;
-    utYolo.checkClassStorage(classSaverYoloLeft, detectedFrameClassLeft);
+    utYolo.checkClassStorage(classSaverYoloLeft, detectedFrameClassLeft,file_yolo_class_left);
     std::cout << " : Right : " << std::endl;
     std::cout << "posSaverYoloRight size:" << posSaverYoloRight.size() << ", detectedFrame size:" << detectedFrameRight.size() << std::endl;
-    utYolo.checkStorage(posSaverYoloRight, detectedFrameRight);
-    std::cout << " : Left : " << std::endl;
+    utYolo.checkStorage(posSaverYoloRight, detectedFrameRight,file_yolo_bbox_right);
     std::cout << "classSaverYoloLeft size:" << classSaverYoloRight.size() << ", detectedFrameClass size:" << detectedFrameClassRight.size() << std::endl;
-    utYolo.checkClassStorage(classSaverYoloRight, detectedFrameClassRight);
+    utYolo.checkClassStorage(classSaverYoloRight, detectedFrameClassRight,file_yolo_class_right);
 }
 
 
@@ -302,16 +300,16 @@ void templateMatching() // void*
     std::cout << "position saver : TM : " << std::endl;
     std::cout << " : Left : " << std::endl;
     std::cout << "posSaverTMLeft size:" << posSaverTMLeft.size() << ", detectedFrame size:" << detectedFrameLeft.size() << std::endl;
-    utTM.checkStorageTM(posSaverTMLeft, detectedFrameLeft);
+    utTM.checkStorageTM(posSaverTMLeft, detectedFrameLeft,file_tm_bbox_left);
     std::cout << "Class saver : TM : " << std::endl;
     std::cout << "classSaverTMLeft size:" << classSaverTMLeft.size() << ", detectedFrameClass size:" << detectedFrameClassLeft.size() << std::endl;
-    utTM.checkClassStorageTM(classSaverTMLeft, detectedFrameClassLeft);
+    utTM.checkClassStorageTM(classSaverTMLeft, detectedFrameClassLeft,file_tm_class_left);
     std::cout << " : Right : " << std::endl;
     std::cout << "posSaverTMRight size:" << posSaverTMRight.size() << ", detectedFrame size:" << detectedFrameRight.size() << std::endl;
-    utTM.checkStorageTM(posSaverTMRight, detectedFrameRight);
+    utTM.checkStorageTM(posSaverTMRight, detectedFrameRight,file_tm_bbox_right);
     std::cout << "Class saver : TM : " << std::endl;
     std::cout << "classSaverTMRight size:" << classSaverTMRight.size() << ", detectedFrameClass size:" << detectedFrameClassRight.size() << std::endl;
-    utTM.checkClassStorageTM(classSaverTMRight, detectedFrameClassRight);
+    utTM.checkClassStorageTM(classSaverTMRight, detectedFrameClassRight,file_tm_class_right);
 }
 
 void sequence()
@@ -366,9 +364,9 @@ void sequence()
     }
     std::cout<<"sequential data"<<std::endl;
     std::cout<<"LEFT"<<std::endl;
-    utSeq.checkSeqData(seqData_left, seqClasses_left);
+    utSeq.checkSeqData(seqData_left, seqClasses_left,file_seq_left);
     std::cout<<"RIGHT"<<std::endl;
-    utSeq.checkSeqData(seqData_right,seqClasses_right);
+    utSeq.checkSeqData(seqData_right,seqClasses_right,file_seq_right);
 }
 
 /* main function */
