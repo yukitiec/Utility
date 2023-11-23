@@ -33,12 +33,18 @@ extern const cv::Mat distCoeffs = (cv::Mat_<double>(1, 5) << 1, 1, 1, 1, 1);
 extern const int TARGET_DEPTH = 400; // catching point is 40 cm away from camera position
 
 /* save file setting */
-extern const std::string file_yolo_bbox = "yolo_bbox_test300fpsmp4.csv";
-extern const std::string file_yolo_class = "yolo_class_test300fpsmp4.csv";
-extern const std::string file_tm_bbox = "tm_bbox_test300fpsmp4.csv";
-extern const std::string file_tm_class = "tm_class_test300fpsmp4.csv";
-extern const std::string file_seq_bbox = "seqData_bbox_test300fpsmp4.csv";
-extern const std::string file_seq_class = "seqData_class_test300fpsmp4.csv";
+extern const std::string file_yolo_bbox_left = "yolo_bbox_test300fpsmp4_left.csv";
+extern const std::string file_yolo_class_left = "yolo_class_test300fpsmp4_left.csv";
+extern const std::string file_tm_bbox_left = "tm_bbox_test300fpsmp4_left.csv";
+extern const std::string file_tm_class_left = "tm_class_test300fpsmp4_left.csv";
+extern const std::string file_seq_bbox_left = "seqData_bbox_test300fpsmp4_left.csv";
+extern const std::string file_seq_class_left = "seqData_class_test300fpsmp4_left.csv";
+extern const std::string file_yolo_bbox_right = "yolo_bbox_test300fpsmp4_right.csv";
+extern const std::string file_yolo_class_right = "yolo_class_test300fpsmp4_right.csv";
+extern const std::string file_tm_bbox_right = "tm_bbox_test300fpsmp4_right.csv";
+extern const std::string file_tm_class_right = "tm_class_test300fpsmp4_right.csv";
+extern const std::string file_seq_bbox_right = "seqData_bbox_test300fpsmp4_right.csv";
+extern const std::string file_seq_class_right = "seqData_class_test300fpsmp4_right.csv";
 
 // queue definition
 std::queue<std::array<cv::Mat1b, 2>> queueFrame; // queue for frame
