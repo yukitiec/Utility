@@ -51,7 +51,8 @@ extern std::queue<std::vector<bool>> queueTMScalesRight;          // queue for s
 extern std::queue<bool> queueLabelUpdateRight;                    // for updating labels of sequence data
 
 // 3D positioning ~ trajectory prediction
-extern std::queue<int> queueTargetFrameIndex;                      // TM estimation frame
+extern std::queue<int> queueTargetFrameIndex_left;                      // TM estimation frame
+extern std::queue<int> queueTargetFrameIndex_right;
 extern std::queue<std::vector<cv::Rect2d>> queueTargetBboxesLeft;  // bboxes from template matching for predict objects' trajectory
 extern std::queue<std::vector<cv::Rect2d>> queueTargetBboxesRight; // bboxes from template matching for predict objects' trajectory
 extern std::queue<std::vector<int>> queueTargetClassIndexesLeft;   // class from template matching for maintain consistency
@@ -83,7 +84,8 @@ public:
         std::queue<std::vector<int>>& queueTMClassIndexLeft, std::queue<std::vector<cv::Rect2d>>& queueTMBboxLeft,
         std::queue<std::vector<cv::Mat1b>>& queueTMTemplateLeft,std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>& queueTrackerMOSSE_left, std::queue<std::vector<bool>>& queueTMScalesLeft,
         std::queue<std::vector<int>>& queueYoloClassIndexLeft,std::queue<std::vector<cv::Rect2d>>& queueYoloBboxLeft,
-        std::queue<std::vector<cv::Mat1b>>& queueYoloTemplateLeft,std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerYolo_left
+        std::queue<std::vector<cv::Mat1b>>& queueYoloTemplateLeft,std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerYolo_left,
+        std::queue<int> queueTargetFrameIndex_left,std::queue<std::vector<int>>& queueTargetClassIndexesLeft,std::queue<std::vector<cv::Rect2d>>& queueTargetBboxesLeft
         )
     {
         // for updating templates
@@ -129,7 +131,7 @@ public:
             if (!queueTrackerYolo_left.empty())
             {
                 /* get Yolo data and update Template matchin data */
-                organizeData_mosse(boolScalesTM, boolTrackerYolo, classIndexTMLeft, trackers_mosse, bboxesTM, updatedTrackers, updatedBboxes, updatedClasses, numTrackersTM);
+                organizeData_mosse(boolScalesTM, boolTrackerYolo, classIndexTMLeft, trackers_mosse, bboxesTM, updatedTrackers, updatedBboxes, updatedClasses, numTrackersTM,,queueYoloClassIndexLeft,queueYoloBboxLeft,queueTrackerYolo_left);
             }
             /* template from yolo isn't available but TM tracker exist */
             else if (boolTrackerTM)
@@ -151,7 +153,7 @@ public:
             if (!queueYoloTemplateLeft.empty())
             {
                 /* get Yolo data and update Template matchin data */
-                organizeData(boolScalesTM, boolTrackerYolo, classIndexTMLeft, templatesTM, bboxesTM, updatedTemplates, updatedBboxes, updatedClasses, numTrackersTM);
+                organizeData(boolScalesTM, boolTrackerYolo, classIndexTMLeft, templatesTM, bboxesTM, updatedTemplates, updatedBboxes, updatedClasses, numTrackersTM,,queueYoloClassIndexLeft,queueYoloBboxLeft,queueYoloTemplateLeft);
             }
             /* template from yolo isn't available but TM tracker exist */
             else if (boolTrackerTM)
@@ -216,7 +218,7 @@ public:
                 if (!queueTargetFrameIndex.empty()) queueTargetFrameIndex.pop();
                 if (!queueTargetClassIndexesLeft.empty()) queueTargetClassIndexesLeft.pop();
                 if (!queueTargetBboxesLeft.empty()) queueTargetBboxesLeft.pop();
-                queueTargetFrameIndex.push(frameIndex);
+                queueTargetFrameIndex_left.push(frameIndex);
                 queueTargetClassIndexesLeft.push(updatedClassesTM);
                 queueTargetBboxesLeft.push(updatedBboxesTM);
             }
@@ -275,6 +277,7 @@ public:
             }
         }
     }
+
     void getTemplateMatchingDataLeft(bool& boolTrackerTM, std::vector<int>& classIndexTMLeft, std::vector<cv::Rect2d>& bboxesTM, std::vector<cv::Mat1b>& templatesTM, std::vector<bool>& boolScalesTM, int& numTrackersTM,
                                     std::queue<std::vector<int>>& queueTMClassIndexLeft, std::queue<std::vector<cv::Rect2d>>& queueTMBboxLeft,
                                     std::queue<std::vector<cv::Mat1b>>& queueTMTemplateLeft,std::queue<std::vector<bool>>& queueTMScalesLeft)
@@ -324,7 +327,8 @@ public:
     }
 
     void organizeData(std::vector<bool>& boolScalesTM, bool& boolTrackerYolo, std::vector<int>& classIndexTMLeft, std::vector<cv::Mat1b>& templatesTM,
-        std::vector<cv::Rect2d>& bboxesTM, std::vector<cv::Mat1b>& updatedTemplates, std::vector<cv::Rect2d>& updatedBboxes, std::vector<int>& updatedClasses, int& numTrackersTM)
+        std::vector<cv::Rect2d>& bboxesTM, std::vector<cv::Mat1b>& updatedTemplates, std::vector<cv::Rect2d>& updatedBboxes, std::vector<int>& updatedClasses, int& numTrackersTM,
+        std::queue<std::vector<int>>& queueYoloClassIndexLeft,std::queue<std::vector<cv::Rect2d>>& queueYoloBboxLeft,std::queue<std::vector<cv::Mat1b>>& queueYoloTemplateLeft)
     {
         std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
         //std::cout << "TM :: Yolo data is available" << std::endl;
@@ -340,13 +344,14 @@ public:
         bboxesYoloLeft.reserve(10); // get current frame data
         std::vector<int> classIndexesYoloLeft;
         classIndexesYoloLeft.reserve(150);
-        getYoloDataLeft(templatesYoloLeft, bboxesYoloLeft, classIndexesYoloLeft); // get new frame
+        getYoloDataLeft(templatesYoloLeft, bboxesYoloLeft, classIndexesYoloLeft,queueYoloClassIndexLeft,queueYoloBboxLeft,queueYoloTemplateLeft); // get new frame
         // combine Yolo and TM data, and update latest data
         combineYoloTMData(classIndexesYoloLeft, classIndexTMLeft, templatesYoloLeft, templatesTM, bboxesYoloLeft, bboxesTM, updatedTemplates, updatedBboxes, updatedClasses, boolScalesTM, numTrackersTM);
     }
 
     void organizeData_mosse(std::vector<bool>& boolScalesTM, bool& boolTrackerYolo, std::vector<int>& classIndexTMLeft, std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>& trackers_mosse,
-        std::vector<cv::Rect2d>& bboxesTM, std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>& updatedTrackers, std::vector<cv::Rect2d>& updatedBboxes, std::vector<int>& updatedClasses, int& numTrackersTM)
+        std::vector<cv::Rect2d>& bboxesTM, std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>& updatedTrackers, std::vector<cv::Rect2d>& updatedBboxes, std::vector<int>& updatedClasses, int& numTrackersTM,
+        std::queue<std::vector<int>>& queueYoloClassIndexLeft,std::queue<std::vector<cv::Rect2d>>& queueYoloBboxLeft,std::queue<std::vector<cv::Mat1b>>& queueTrackerYolo_left)
     {
         std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
         //std::cout << "TM :: Yolo data is available" << std::endl;
@@ -362,12 +367,13 @@ public:
         bboxesYoloLeft.reserve(10); // get current frame data
         std::vector<int> classIndexesYoloLeft;
         classIndexesYoloLeft.reserve(150);
-        getYoloDataLeft_mosse(trackersYoloLeft, bboxesYoloLeft, classIndexesYoloLeft); // get new frame
+        getYoloDataLeft_mosse(trackersYoloLeft, bboxesYoloLeft, classIndexesYoloLeft,queueYoloClassIndexLeft,queueYoloBboxLeft,queueTrackerYolo_left); // get new frame
         // combine Yolo and TM data, and update latest data
         combineYoloTMData_mosse(classIndexesYoloLeft, classIndexTMLeft, trackersYoloLeft, trackers_mosse, bboxesYoloLeft, bboxesTM, updatedTrackers, updatedBboxes, updatedClasses, boolScalesTM, numTrackersTM);
     }
 
-    void getYoloDataLeft(std::vector<cv::Mat1b>& newTemplates, std::vector<cv::Rect2d>& newBboxes, std::vector<int>& newClassIndexes)
+    void getYoloDataLeft(std::vector<cv::Mat1b>& newTemplates, std::vector<cv::Rect2d>& newBboxes, std::vector<int>& newClassIndexes,
+                        std::queue<std::vector<int>>& queueYoloClassIndexLeft,std::queue<std::vector<cv::Rect2d>>& queueYoloBboxLeft,std::queue<std::vector<cv::Mat1b>>& queueYoloTemplateLeft)
     {
         newTemplates = queueYoloTemplateLeft.front();
         newBboxes = queueYoloBboxLeft.front();
@@ -383,7 +389,8 @@ public:
         std::cout << std::endl;
     }
 
-    void getYoloDataLeft_mosse(std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>& newTrackers, std::vector<cv::Rect2d>& newBboxes, std::vector<int>& newClassIndexes)
+    void getYoloDataLeft_mosse(std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>& newTrackers, std::vector<cv::Rect2d>& newBboxes, std::vector<int>& newClassIndexes,
+                                std::queue<std::vector<int>>& queueYoloClassIndexLeft,std::queue<std::vector<cv::Rect2d>>& queueYoloBboxLeft,std::queue<std::vector<cv::Mat1b>>& queueTrackerYolo_left)
     {
         newTrackers = queueTrackerYolo_left.front();
         newBboxes = queueYoloBboxLeft.front();
