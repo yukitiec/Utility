@@ -6,11 +6,16 @@
 #include "stdafx.h";
 
 // 3D positioning ~ trajectory prediction
-extern std::queue<int> queueTargetFrameIndex;                      // TM estimation frame
+extern std::queue<int> queueTargetFrameIndex_left;                      // TM estimation frame
+extern std::queue<int> queueTargetFrameIndex_right;
 extern std::queue<std::vector<cv::Rect2d>> queueTargetBboxesLeft;  // bboxes from template matching for predict objects' trajectory
 extern std::queue<std::vector<cv::Rect2d>> queueTargetBboxesRight; // bboxes from template matching for predict objects' trajectory
 extern std::queue<std::vector<int>> queueTargetClassIndexesLeft;   // class from template matching for maintain consistency
 extern std::queue<std::vector<int>> queueTargetClassIndexesRight;  // class from template matching for maintain consistency
+
+//latest labels for matching data in both images
+extern std::queue<std::vector<int>> queueUpdateLabels_left;
+extern std::queue<std::vector<int>> queueUpdateLabels_right;
 
 class Sequence
 {
@@ -20,13 +25,15 @@ public:
         std::cout << "construct Sequence class" << std::endl;
     }
 
-    void updateData(std::vector<std::vector<std::vector<int>>>& dataLeft, std::vector<std::vector<int>>& classesLeft)
+    void updateData(std::vector<std::vector<std::vector<int>>>& dataLeft, std::vector<std::vector<int>>& classesLeft,
+                    std::queue<int>& queueTargetFrameIndex_left, std::queue<std::vector<int>>& queueTargetClassIndexesLeft, std::queue<std::vector<cv::Rect2d>>& queueTargetBboxesLeft,
+                    std::queue<std::vector<int>>& queueUpdateLabels_left)
     {
         int frameIndex;
         std::vector<int> classesCurrentLeft; // latest classes
         std::vector<cv::Rect2d> bboxesLeft;  // latest datas
         /* get tracking data fromt TM */
-        bool ret = getTargetData(frameIndex, classesCurrentLeft, bboxesLeft);
+        bool ret = getTargetData(frameIndex, classesCurrentLeft, bboxesLeft,queueTargetFrameIndex_left,queueTargetClassIndexesLeft,queueTargetBboxesLeft);
         /* data available */
         if (ret)
         {
@@ -40,6 +47,8 @@ public:
                 /* labels should be synchronized with TM labels */
                 //std::cout << "update data and save" << std::endl;
                 addData(classesLeft, dataLeft, dataCurrentLeft, classesCurrentLeft); // classesLeft and dataLeft is storage, dataCurrentLeft is latest data, and updatedClassesLeft is new class list
+                //new data added
+                if (!dataCurrentLeft.empty()) queueUpdateLabels_left.push(classesLeft.back());
             }
             /* past data doesn't exist */
             else
@@ -62,6 +71,8 @@ public:
                     }
                 }
                 classesLeft.push_back(newClasses);
+                //new data added
+                if (!dataCurrentLeft.empty()) queueUpdateLabels_left.push(newClasses); //updated class labels for letting matching.h match data in both images
             }
         }
         /* data isn't available */
@@ -71,14 +82,15 @@ public:
         }
     }
 
-    bool getTargetData(int& frameIndex, std::vector<int>& classesLeft, std::vector<cv::Rect2d>& bboxesLeft)
+    bool getTargetData(int& frameIndex, std::vector<int>& classesLeft, std::vector<cv::Rect2d>& bboxesLeft,
+                        std::queue<int>& queueTargetFrameIndex_left, std::queue<std::vector<int>>& queueTargetClassIndexesLeft, std::queue<std::vector<cv::Rect2d>>& queueTargetBboxesLeft)
     {
         //std::unique_lock<std::mutex> lock(mtxTarget); // Lock the mutex
         /* both data is available */
         bool ret = false;
         if (!queueTargetBboxesLeft.empty())
         {
-            frameIndex = queueTargetFrameIndex.front();
+            frameIndex = queueTargetFrameIndex_left.front();
             classesLeft = queueTargetClassIndexesLeft.front();
             bboxesLeft = queueTargetBboxesLeft.front();
             queueTargetFrameIndex.pop();
