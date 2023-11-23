@@ -39,7 +39,8 @@ extern std::queue<std::vector<bool>> queueTMScalesRight;          // queue for s
 extern std::queue<bool> queueLabelUpdateRight;                    // for updating labels of sequence data
 
 // 3D positioning ~ trajectory prediction
-extern std::queue<int> queueTargetFrameIndex;                      // TM estimation frame
+extern std::queue<int> queueTargetFrameIndex_left;                      // TM estimation frame
+extern std::queue<int> queueTargetFrameIndex_right;
 extern std::queue<std::vector<cv::Rect2d>> queueTargetBboxesLeft;  // bboxes from template matching for predict objects' trajectory
 extern std::queue<std::vector<cv::Rect2d>> queueTargetBboxesRight; // bboxes from template matching for predict objects' trajectory
 extern std::queue<std::vector<int>> queueTargetClassIndexesLeft;   // class from template matching for maintain consistency
@@ -254,8 +255,16 @@ void templateMatching() // void*
         bool boolLeft = false;
         /*start template matching process */
         auto start = std::chrono::high_resolution_clock::now();
-        std::thread thread_left(&TemplateMatching::templateMatchingForLeft, tm,);
-        std::thread thread_left(&TemplateMatching::templateMatchingForLeft, tm, );
+
+std::vector<cv::Mat1b>& templateImgs,
+        std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver, std::vector<int>& detectedFrame, std::vector<int>& detectedFrameClass,
+        std::queue<std::vector<int>>& queueTMClassIndexLeft, std::queue<std::vector<cv::Rect2d>>& queueTMBboxLeft,
+        std::queue<std::vector<cv::Mat1b>>& queueTMTemplateLeft,std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>& queueTrackerMOSSE_left, std::queue<std::vector<bool>>& queueTMScalesLeft,
+        std::queue<std::vector<int>>& queueYoloClassIndexLeft,std::queue<std::vector<cv::Rect2d>>& queueYoloBboxLeft,
+        std::queue<std::vector<cv::Mat1b>>& queueYoloTemplateLeft,std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerYolo_left,
+        std::queue<int> queueTargetFrameIndex_left,std::queue<std::vector<int>>& queueTargetClassIndexesLeft,std::queue<std::vector<cv::Rect2d>>& queueTargetBboxesLeft
+        std::thread thread_left(&TemplateMatching::templateMatching, tm, std::ref(frame_left),std::ref(frameIndex),std::ref();
+        std::thread thread_left(&TemplateMatching::templateMatching, tm, );
         thread_left.join();
         thread_right.join();
         auto stop = std::chrono::high_resolution_clock::now();
