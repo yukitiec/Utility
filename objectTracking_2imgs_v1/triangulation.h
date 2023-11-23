@@ -8,7 +8,7 @@
 #include "utility.h"
 
 /*3D position*/
-std::queue<bool> queueStartYolo_left; //if new Yolo inference can start
+extern std::vector<std::vector<std::vector<int>>> seqData_left,seqData_right; //storage for sequential data
 extern std::queue<std::vector<int>> queueUpdateLabels_left;
 extern std::queue<std::vector<int>> queueUpdateLabels_right;
 
