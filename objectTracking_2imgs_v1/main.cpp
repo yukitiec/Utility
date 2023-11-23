@@ -145,7 +145,8 @@ void yoloDetect()
         std::cout << " YOLO -- " << countIteration << " -- " << std::endl;
 
         /*start yolo detection */
-        yolodetector.detectLeft(concatFrame, frameIndex, posSaverYoloLeft, classSaverYoloLeft, detectedFrame, detectedFrameClass, countIteration);
+        yolodetector.detect(concatFrame, frameIndex, posSaverYoloLeft,posSaverYoloRight, classSaverYoloLeft, classSaverYoloRight, 
+                            detectedFrameLeft, detectedFrameRight, detectedFrameClassLeft,detectedFrameClassRight, countIteration);
         auto stop = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
         std::cout << " Time taken by YOLO detection : " << duration.count() << " milliseconds" << std::endl;
