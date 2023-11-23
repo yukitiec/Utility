@@ -103,6 +103,14 @@ public:
         queueTriangulation_right.pop();
     }
 
+    void matching(std::vector<std::vector<std::vector<int>>>& seqData_left,std::vector<std::vector<std::vector<int>>>& seqData_right)
+    {
+        /**
+        * matching in y value
+        *
+        */
+    }
+
     void triangulation(std::vector<std::vector<std::vector<int>>>& data_left, std::vector<std::vector<std::vector<int>>>& data_right,
         std::vector<std::vector<std::vector<int>>>& data_3d)
     {
