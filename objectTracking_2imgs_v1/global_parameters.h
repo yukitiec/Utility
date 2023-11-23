@@ -73,7 +73,7 @@ std::queue<std::vector<int>> queueTMClassIndexRight;       // queue for class in
 std::queue<std::vector<bool>> queueTMScalesRight;          // queue for search area scale
 std::queue<bool> queueLabelUpdateRight;                    // for updating labels of sequence data
 
-// 3D positioning ~ trajectory prediction
+// sequential data
 std::vector<std::vector<std::vector<int>>> seqData_left,seqData_right; //storage for sequential data
 std::queue<int> queueTargetFrameIndex_left;                      // TM estimation frame
 std::queue<int> queueTargetFrameIndex_right;                      // TM estimation frame
@@ -81,6 +81,10 @@ std::queue<std::vector<cv::Rect2d>> queueTargetBboxesLeft;  // bboxes from templ
 std::queue<std::vector<cv::Rect2d>> queueTargetBboxesRight; // bboxes from template matching for predict objects' trajectory
 std::queue<std::vector<int>> queueTargetClassIndexesLeft;   // class from template matching for maintain consistency
 std::queue<std::vector<int>> queueTargetClassIndexesRight;  // class from template matching for maintain consistency
+
+//matching
+std::queue<std::vector<int>> queueUpdateLabels_left;
+std::queue<std::vector<int>> queueUpdateLabels_right;
 
 //mutex
 std::mutex mtxImg, mtxYoloLeft, mtxTMLeft, mtxTarget; // define mutex
