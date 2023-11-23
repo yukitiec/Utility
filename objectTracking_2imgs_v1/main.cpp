@@ -263,7 +263,6 @@ void templateMatching() // void*
                                 std::ref(queueTMClassIndexRight),std::ref(queueTMBboxRight),std::ref(queueTMTemplateRight),std::ref(queueTrackerMOSSE_right),std::ref(queueTMScalesRight),
                                 std::ref(queueYoloClassIndexRight),std::ref(queueYoloBboxRight),std::ref(queueYoloTemplateRight),std::ref(queueTrackerYolo_right),
                                 std::ref(queueTargetFrameIndex_right),std::ref(queueTargetClassINdexesRight),std::ref(queueTargetBboxesRight));
-        std::thread thread_left(&TemplateMatching::templateMatching, tm, );
         thread_left.join();
         thread_right.join();
         auto stop = std::chrono::high_resolution_clock::now();
