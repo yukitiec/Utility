@@ -255,15 +255,10 @@ void templateMatching() // void*
         bool boolLeft = false;
         /*start template matching process */
         auto start = std::chrono::high_resolution_clock::now();
-
-std::vector<cv::Mat1b>& templateImgs,
-        std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver, std::vector<int>& detectedFrame, std::vector<int>& detectedFrameClass,
-        std::queue<std::vector<int>>& queueTMClassIndexLeft, std::queue<std::vector<cv::Rect2d>>& queueTMBboxLeft,
-        std::queue<std::vector<cv::Mat1b>>& queueTMTemplateLeft,std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>& queueTrackerMOSSE_left, std::queue<std::vector<bool>>& queueTMScalesLeft,
-        std::queue<std::vector<int>>& queueYoloClassIndexLeft,std::queue<std::vector<cv::Rect2d>>& queueYoloBboxLeft,
-        std::queue<std::vector<cv::Mat1b>>& queueYoloTemplateLeft,std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerYolo_left,
-        std::queue<int> queueTargetFrameIndex_left,std::queue<std::vector<int>>& queueTargetClassIndexesLeft,std::queue<std::vector<cv::Rect2d>>& queueTargetBboxesLeft
-        std::thread thread_left(&TemplateMatching::templateMatching, tm, std::ref(frame_left),std::ref(frameIndex),std::ref();
+        std::thread thread_left(&TemplateMatching::templateMatching, tm, std::ref(frame_left),std::ref(frameIndex),std::ref(posSaverLeft),std::ref(classSaverLeft),std::ref(detectedFrameLeft),std::ref(detectedFrameClassLeft),
+                                std::ref(queueTMClassIndexLeft),std::ref(queueTMBboxLeft),std::ref(queueTMTemplateLeft),std::ref(queueTrackerMOSSE_left),std::ref(queueTMScalesLeft),
+                                std::ref(queueYoloClassIndexLeft),std::ref(queueYoloBboxLeft),std::ref(queueYoloTemplateLeft),std::ref(queueTrackerYolo_left),
+                                std::ref(queueTargetFrameIndex_left),std::ref(queueTargetClassINdexesLeft),std::ref(queueTargetBboxesLeft));
         std::thread thread_left(&TemplateMatching::templateMatching, tm, );
         thread_left.join();
         thread_right.join();
