@@ -43,13 +43,18 @@ extern std::queue<std::vector<int>> queueTMClassIndexRight;       // queue for c
 extern std::queue<std::vector<bool>> queueTMScalesRight;          // queue for search area scale
 extern std::queue<bool> queueLabelUpdateRight;                    // for updating labels of sequence data
 
-// 3D positioning ~ trajectory prediction
+// for saving sequence data
+extern std::vector<std::vector<std::vector<int>>> seqData_left,seqData_right; //storage for sequential data
 extern std::queue<int> queueTargetFrameIndex_left;                      // TM estimation frame
 extern std::queue<int> queueTargetFrameIndex_right;
 extern std::queue<std::vector<cv::Rect2d>> queueTargetBboxesLeft;  // bboxes from template matching for predict objects' trajectory
 extern std::queue<std::vector<cv::Rect2d>> queueTargetBboxesRight; // bboxes from template matching for predict objects' trajectory
 extern std::queue<std::vector<int>> queueTargetClassIndexesLeft;   // class from template matching for maintain consistency
 extern std::queue<std::vector<int>> queueTargetClassIndexesRight;  // class from template matching for maintain consistency
+
+//for matching 
+extern std::queue<std::vector<int>> queueUpdateLabels_left;
+extern std::queue<std::vector<int>> queueUpdatedLabels_right;
 
 // declare function
 /* yolo detection */
@@ -289,7 +294,6 @@ void sequence()
     Sequence seq; //sequential data
     Utility utSeq; //check data
 
-    std::vector<std::vector<std::vector<int>>> seqData_left,seqData_right; //storage for sequential data
     std::vector<std::vector<int>> seqClasses_left,seqClasses_right; // storage for sequential classes
 
     while (true)
@@ -318,7 +322,12 @@ void sequence()
             if (!queueTargetBboxesLeft.empty())
             {
                 auto start = std::chrono::high_resolution_clock::now();
-                seq.updateData(seqData, seqClasses);
+                std::thread thread_left(&Sequence::updateData,seq,std::ref(seqData_left),std::ref(seqClasses_left),std::ref(queueTargetFrameIndex_left),
+                                        std::ref(queueTargetClassIndexesLeft), std::ref(queueTargetBboxesLeft),std::ref(queueUpdateLabels_left));
+                std::thread thread_left(&Sequence::updateData,seq,std::ref(seqData_right),std::ref(seqClasses_right),std::ref(queueTargetFrameIndex_right),
+                                        std::ref(queueTargetClassIndexesRight), std::ref(queueTargetBboxesRight),std::ref(queueUpdateLabels_right))
+                thread_left.join();
+                thread_right.join();
                 auto stop = std::chrono::high_resolution_clock::now();
                 auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
                 std::cout << " Time taken by save sequential data : " << duration.count() << " milliseconds" << std::endl;
