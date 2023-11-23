@@ -259,6 +259,10 @@ void templateMatching() // void*
                                 std::ref(queueTMClassIndexLeft),std::ref(queueTMBboxLeft),std::ref(queueTMTemplateLeft),std::ref(queueTrackerMOSSE_left),std::ref(queueTMScalesLeft),
                                 std::ref(queueYoloClassIndexLeft),std::ref(queueYoloBboxLeft),std::ref(queueYoloTemplateLeft),std::ref(queueTrackerYolo_left),
                                 std::ref(queueTargetFrameIndex_left),std::ref(queueTargetClassINdexesLeft),std::ref(queueTargetBboxesLeft));
+        std::thread thread_right(&TemplateMatching::templateMatching, tm, std::ref(frame_right),std::ref(frameIndex),std::ref(posSaverRight),std::ref(classSaverRight),std::ref(detectedFrameRight),std::ref(detectedFrameClassRight),
+                                std::ref(queueTMClassIndexRight),std::ref(queueTMBboxRight),std::ref(queueTMTemplateRight),std::ref(queueTrackerMOSSE_right),std::ref(queueTMScalesRight),
+                                std::ref(queueYoloClassIndexRight),std::ref(queueYoloBboxRight),std::ref(queueYoloTemplateRight),std::ref(queueTrackerYolo_right),
+                                std::ref(queueTargetFrameIndex_right),std::ref(queueTargetClassINdexesRight),std::ref(queueTargetBboxesRight));
         std::thread thread_left(&TemplateMatching::templateMatching, tm, );
         thread_left.join();
         thread_right.join();
