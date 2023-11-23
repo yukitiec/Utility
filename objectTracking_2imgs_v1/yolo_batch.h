@@ -173,7 +173,7 @@ public:
         /* push and save data */
         push2Queue(existedRoi_left, newRoi_left, existedClass_left, newClass_left, frame, posSaver_left, classSaver_left, frameIndex, detectedFrame_left, detectedFrameClass_left, 
                         queueYoloClassIndexLeft, queueYoloBboxLeft, queueYoloTemplateLeft,queueTrackerYolo_left);
-        push2QueueLeft(existedRoi_right, newRoi_right, existedClass_right, newClass_right, frame, posSaver_right, classSaver_right, frameIndex, detectedFrame_right, detectedFrameClass_right, 
+        push2Queue(existedRoi_right, newRoi_right, existedClass_right, newClass_right, frame, posSaver_right, classSaver_right, frameIndex, detectedFrame_right, detectedFrameClass_right, 
                         queueYoloClassIndexRight, queueYoloBboxRight, queueYoloTemplateRight,queueTrackerYolo_right);
 );
     }
