@@ -6,10 +6,15 @@
 #include "prediction.h"
 #include "global_parameters.h"
 
+// tracker
+extern const bool boolMOSSE;
+extern const double threshold_mosse;
+
 // queue definition
-extern std::queue<std::array<cv::Mat1b,2>> queueFrame; // queue for frame
+extern std::queue<std::array<cv::Mat1b, 2>> queueFrame; // queue for frame
 extern std::queue<int> queueFrameIndex;  // queue for frame index
 
+//mosse
 extern std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerYolo_left;
 extern std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerYolo_right;
 extern std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerMOSSE_left;
@@ -45,7 +50,6 @@ extern std::queue<std::vector<cv::Rect2d>> queueTargetBboxesLeft;  // bboxes fro
 extern std::queue<std::vector<cv::Rect2d>> queueTargetBboxesRight; // bboxes from template matching for predict objects' trajectory
 extern std::queue<std::vector<int>> queueTargetClassIndexesLeft;   // class from template matching for maintain consistency
 extern std::queue<std::vector<int>> queueTargetClassIndexesRight;  // class from template matching for maintain consistency
-
 
 // declare function
 /* yolo detection */
@@ -285,8 +289,8 @@ void sequence()
     Sequence seq; //sequential data
     Utility utSeq; //check data
 
-    std::vector<std::vector<std::vector<int>>> seqData; //storage for sequential data
-    std::vector<std::vector<int>> seqClasses; // storage for sequential classes
+    std::vector<std::vector<std::vector<int>>> seqData_left,seqData_right; //storage for sequential data
+    std::vector<std::vector<int>> seqClasses_left,seqClasses_right; // storage for sequential classes
 
     while (true)
     {
