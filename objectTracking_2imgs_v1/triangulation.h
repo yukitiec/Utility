@@ -6,9 +6,22 @@
 #include "stdafx.h"
 #include "global_parameters.h"
 #include "utility.h"
+#include "matching.h"
+
+//3d storage
+extern const int numObjects;
+std::vector<std::vector<std::vector<int>>> data_3d(numObjects); //{num of objects, sequential, { frameIndex, X,Y,Z }}
+
+extern const std::string file_3d;
+
+//Yolo detect signal
+extern std::queue<bool> queueYolo_seq2tri_left, queueYolo_seq2tri_right;
+extern std::queue<bool> queue_tri2predict;
+std::queue<std::vector<std::vector<int>>> queueMatchingIndexes; //for saving matching indexes
+
 
 /*3D position*/
-extern std::vector<std::vector<std::vector<int>>> seqData_left,seqData_right; //storage for sequential data
+extern std::vector<std::vector<std::vector<int>>> seqData_left, seqData_right; //storage for sequential data
 extern std::queue<std::vector<int>> queueUpdateLabels_left;
 extern std::queue<std::vector<int>> queueUpdateLabels_right;
 
@@ -40,21 +53,21 @@ public:
     void main()
     {
         Utility utTri;//constructor
+        Matching match; //matching algorithm
         while (true)
         {
-            if (!queueTriangulation_left.empty() && !queueTriangulation_right.empty()) break;
+            if (!queueUpdateLabels_left.empty() && !queueUpdateLabels_right.empty()) break;
             //std::cout << "wait for target data" << std::endl;
         }
         std::cout << "start calculating 3D position" << std::endl;
 
-
-        std::vector<std::vector<std::vector<std::vector<int>>>> posSaver_3d; //{num of sequence, num of human, joints, {frameIndex, X,Y,Z}}
         int counterIteration = 0;
         int counterFinish = 0;
+        int counter = 0;//counter before delete new data
         while (true) // continue until finish
         {
             counterIteration++;
-            if (queueFrame.empty() && queueTriangulation_left.empty() && queueTriangulation_right.empty())
+            if (queueFrame.empty() && queueUpdateLabels_left.empty() && queueUpdateLabels_right.empty())
             {
                 if (counterFinish == 10) break;
                 counterFinish++;
@@ -65,159 +78,151 @@ public:
             else
             {
                 /* new detection data available */
-                if (!queueTriangulation_left.empty() && !queueTriangulation_right.empty())
+                if (!queueUpdateLabels_left.empty() && !queueUpdateLabels_right.empty())
                 {
+                    counter = 0; //reset
                     auto start = std::chrono::high_resolution_clock::now();
-                    std::vector<std::vector<std::vector<int>>> data_left, data_right;
                     std::cout << "start 3d positioning" << std::endl;
-                    getData(data_left, data_right);
-                    std::cout << "start" << std::endl;
-                    std::vector<std::vector<std::vector<int>>> data_3d; //{num of human, joints, {frameIndex, X,Y,Z}}
-                    triangulation(data_left, data_right, data_3d);
-                    std::cout << "calculate 3d position" << std::endl;
-                    /* arrange posSaver -> sequence data */
-                    arrangeData(data_3d, posSaver_3d);
-                    std::cout << "arrange data" << std::endl;
-                    auto stop = std::chrono::high_resolution_clock::now();
-                    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
-                    std::cout << "time taken by 3d positioning=" << duration.count() << " milliseconds" << std::endl;
+                    //get latest classes
+                    std::vector<int> labels_left = queueUpdateLabels_left.front(); queueUpdateLabels_left.pop();
+                    std::vector<int> labels_right = queueUpdateLabels_right.front(); queueUpdateLabels_right.pop();
+                    std::vector<std::vector<int>> matchingIndexes; //list for matching indexes
+                    //matching algorithm
+                    if (!queueYolo_seq2tri_left.empty() && !queueYolo_seq2tri_right.empty())
+                    {
+                        std::cout << "update matching" << std::endl;
+                        queueYolo_seq2tri_left.pop(); 
+                        queueYolo_seq2tri_right.pop();
+                        match.main(seqData_left, seqData_right, labels_left, labels_right, matchingIndexes); //matching objects in 2 images
+                        sortData(matchingIndexes);
+                    }
+                    //use previous matching indexes
+                    else if (!queueMatchingIndexes.empty())
+                    {
+                        matchingIndexes = queueMatchingIndexes.front();
+                        queueMatchingIndexes.pop();
+                    }
+                    //calculate 3d positions based on matchingIndexes
+                    if (!matchingIndexes.empty())
+                    {
+                        std::cout << "start 3D positioning" << std::endl;
+                        triangulation(seqData_left, seqData_right, matchingIndexes,data_3d);
+                        queue_tri2predict.push(true);
+                        std::cout << "calculate 3d position" << std::endl;
+                        auto stop = std::chrono::high_resolution_clock::now();
+                        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+                        std::cout << "time taken by 3d positioning=" << duration.count() << " milliseconds" << std::endl;
+                    }
+                 
                 }
                 /* at least one data can't be available -> delete data */
                 else
                 {
                     //std::cout << "both data can't be availble :: left " << !queueTriangulation_left.empty() << ", right=" << queueTriangulation_right.empty() << std::endl;
-                    if (!queueTriangulation_left.empty()) queueTriangulation_left.pop();
-                    if (!queueTriangulation_right.empty()) queueTriangulation_right.pop();
+                    if (counter == 5)
+                    {
+                        if (!queueUpdateLabels_left.empty()) queueUpdateLabels_left.pop();
+                        if (!queueUpdateLabels_right.empty()) queueUpdateLabels_right.pop();
+                    }
+                    else if (!queueUpdateLabels_left.empty() || !queueUpdateLabels_right.empty()) counter++;
+                   
                 }
             }
         }
         std::cout << "***triangulation data***" << std::endl;
-        utTri.save3d(posSaver_3d, file_3d);
+        utTri.save3d(data_3d,file_3d);
     }
 
-    void getData(std::vector<std::vector<std::vector<int>>>& data_left, std::vector<std::vector<std::vector<int>>>& data_right)
+    void sortData(std::vector<std::vector<int>>& data)
     {
-        data_left = queueTriangulation_left.front();
-        data_right = queueTriangulation_right.front();
-        queueTriangulation_left.pop();
-        queueTriangulation_right.pop();
+        // Sorting in ascending way
+        std::sort(data.begin(), data.end(), compareVectors);
     }
 
-    void matching(std::vector<std::vector<std::vector<int>>>& seqData_left,std::vector<std::vector<std::vector<int>>>& seqData_right)
+    bool compareVectors(const std::vector<int>& a, const std::vector<int>& b) 
     {
-        /**
-        * matching in y value
-        *
-        */
+        // Compare based on the first element of each vector
+        return a[0] < b[0];
     }
 
-    void triangulation(std::vector<std::vector<std::vector<int>>>& data_left, std::vector<std::vector<std::vector<int>>>& data_right,
-        std::vector<std::vector<std::vector<int>>>& data_3d)
+    void triangulation(std::vector<std::vector<std::vector<int>>>& data_left, std::vector<std::vector<std::vector<int>>>& data_right, std::vector<std::vector<int>>& matchingIndexes,std::vector<std::vector<std::vector<int>>>& data_3d)
     {
-        int numHuman = std::min(data_left.size(), data_right.size());
-        // for each human
-        for (int i = 0; i < numHuman; i++)
+        //for all matching data
+        for (std::vector<int>& matchIndex : matchingIndexes)
         {
-            std::vector<std::vector<int>> temp;
-            // for each joint
-            for (int j = 0; j < numJoint; j++)
+            int index = matchIndex[0]; //left object's index
+            //calculate objects
+            std::vector<std::vector<int>> left = data_left[matchIndex[0]]; //{num frames, {frameIndex, classLabel,xCenter,yCenter}}
+            std::vector<std::vector<int>> right = data_right[matchIndex[1]]; //{num frames, {frameIndex, classLabel,xCenter,yCenter}}
+            calulate3Ds(index,left, right,data_3d); //{num of objects, sequential, {frameIndex, X,Y,Z}}
+        }
+    }
+
+    void calulate3Ds(int& index, std::vector<std::vector<int>>& left, std::vector<std::vector<int>>& right, std::vector<std::vector<std::vector<int>>>& data_3d)
+    {
+        std::vector<std::vector<int>> temp;
+        int left_frame_start = left[0][0];
+        int right_frame_start = right[0][0];
+        int num_frames_left = left.size();
+        int num_frames_right = right.size();
+        int it_left = 0; int it_right = 0;
+        //check whether previous data is in data_3d -> if exist, check last frame Index
+        if (!data_3d[index].empty())
+        {
+            int last_frameIndex = (data_3d[index].back())[0]; //get last frame index
+            //calculate 3d position for all left data
+            std::vector<std::vector<int>> temp_3d;
+            while (it_left < num_frames_left && it_right < num_frames_right)
             {
-                std::vector<int> result;
-                std::cout << "cal3D" << std::endl;
-                cal3D(data_left[i][j], data_right[i][j], result);
-                std::cout << "finish" << std::endl;
-                temp.push_back(result);
+                if (left[it_left][0] == right[it_right][0] && left[it_left][0] > last_frameIndex)
+                {
+                    std::vector<int> result;
+                    cal3D(left[it_left], right[it_right], result);
+                    if (result[0] != -1) temp_3d.push_back(result); //add 3D data
+                    it_left++;
+                    it_right++;
+                }
+                else if (left[it_left][0] > right[it_right][0]) it_right++;
+                else if (left[it_left][0] < right[it_right][0]) it_left++;
             }
-            data_3d.push_back(temp);
+            if (!temp_3d.empty())
+            {
+                for (std::vector<int>& newData : temp_3d)
+                {
+                    data_3d.at(index).push_back(newData);
+                }
+            }
+        }
+        //no previous data
+        else
+        {
+            //calculate 3d position for all left data
+            std::vector<std::vector<int>> temp_3d;
+            while (it_left < num_frames_left && it_right < num_frames_right)
+            {
+                if (left[it_left][0] == right[it_right][0])
+                {
+                    std::vector<int> result;
+                    cal3D(left[it_left], right[it_right], result);
+                    if (result[0] != -1) temp_3d.push_back(result); //add 3D data
+                    it_left++;
+                    it_right++;
+                }
+                else if (left[it_left][0] > right[it_right][0]) it_right++;
+                else if (left[it_left][0] < right[it_right][0]) it_left++;
+            }
+            if (!temp_3d.empty()) data_3d.at(index) = temp_3d;
         }
     }
 
     void cal3D(std::vector<int>& left, std::vector<int>& right, std::vector<int>& result)
     {
-        //both joints is detected
-        if (left[1] != -1 && right[1] != -1)
-        {
-            // frameIndex is same
-            if (left[0] == right[0])
-            {
-                int xl = left[1]; int xr = right[1]; int yl = left[2]; int yr = right[2];
-                int disparity = (int)(xl - xr);
-                int X = (int)(BASELINE / disparity) * (xl - oX - (fSkew / fY) * (yl - oY));
-                int Y = (int)(BASELINE * (fX / fY) * (yl - oY) / disparity);
-                int Z = (int)(fX * BASELINE / disparity);
-                result = std::vector<int>{ left[0],X,Y,Z };
-            }
-            else
-            {
-                std::cout << "frameIndex is different" << std::endl;
-                int X = -1; int Y = -1; int Z = -1;
-                result = std::vector<int>{ -1,X,Y,Z };
-            }
-        }
-        // at least one isn't detected
-        else
-        {
-            std::cout << "frameIndex is different" << std::endl;
-            int X = -1; int Y = -1; int Z = -1;
-            result = std::vector<int>{ -1,X,Y,Z };
-        }
-
-    }
-
-    void arrangeData(std::vector<std::vector<std::vector<int>>>& data_3d, std::vector<std::vector<std::vector<std::vector<int>>>>& posSaver)
-    {
-        // already first 3d calculation done
-        std::cout << "posSaver.size()=" << posSaver.size() << std::endl;
-        if (!posSaver.empty())
-        {
-            std::vector<std::vector<std::vector<int>>> all; //all human data
-            std::cout << "data3d.size()=" << data_3d.size() << std::endl;
-            // for each human
-            for (int i = 0; i < data_3d.size(); i++)
-            {
-                std::vector<std::vector<int>> tempHuman;
-                /* same human */
-                if (posSaver[posSaver.size() - 1].size() > i)
-                {
-                    // for each joint
-                    for (int j = 0; j < data_3d[i].size(); j++)
-                    {
-                        // detected
-                        if (data_3d[i][j][1] != -1)
-                        {
-                            tempHuman.push_back(data_3d[i][j]);
-                        }
-                        // not detected
-                        else
-                        {
-                            // already detected
-                            if (posSaver[posSaver.size() - 1][i][j][1] != -1)
-                            {
-                                tempHuman.push_back(posSaver[posSaver.size() - 1][i][j]); //adapt last detection
-                            }
-                            // not detected yet
-                            else
-                            {
-                                tempHuman.push_back(data_3d[i][j]); //-1
-                            }
-                        }
-                    }
-                }
-                //new human
-                else
-                {
-                    tempHuman = data_3d[i];
-                }
-                all.push_back(tempHuman); //push human data
-            }
-            posSaver.push_back(all);
-        }
-        // first detection
-        else
-        {
-            std::cout << "first 3d points :: data3d.size()=" << data_3d.size() << std::endl;
-            posSaver.push_back(data_3d);
-        }
+        int xl = left[2]; int xr = right[2]; int yl = left[3]; int yr = right[3];
+        int disparity = (int)(xl - xr);
+        int X = (int)(BASELINE / disparity) * (xl - oX - (fSkew / fY) * (yl - oY));
+        int Y = (int)(BASELINE * (fX / fY) * (yl - oY) / disparity);
+        int Z = (int)(fX * BASELINE / disparity);
+        result = std::vector<int>{ left[0],X,Y,Z };
     }
 
 };

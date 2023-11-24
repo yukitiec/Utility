@@ -5,6 +5,9 @@
 
 #include "stdafx.h";
 
+extern std::queue<bool> queueYolo_tracker2seq_left, queueYolo_tracker2seq_right;
+extern std::queue<bool> queueYolo_seq2tri_left, queueYolo_seq2tri_right;
+
 // 3D positioning ~ trajectory prediction
 extern std::queue<int> queueTargetFrameIndex_left;                      // TM estimation frame
 extern std::queue<int> queueTargetFrameIndex_right;
@@ -26,14 +29,14 @@ public:
     }
 
     void updateData(std::vector<std::vector<std::vector<int>>>& dataLeft, std::vector<std::vector<int>>& classesLeft,
-                    std::queue<int>& queueTargetFrameIndex_left, std::queue<std::vector<int>>& queueTargetClassIndexesLeft, std::queue<std::vector<cv::Rect2d>>& queueTargetBboxesLeft,
-                    std::queue<std::vector<int>>& queueUpdateLabels_left)
+        std::queue<int>& queueTargetFrameIndex_left, std::queue<std::vector<int>>& queueTargetClassIndexesLeft, std::queue<std::vector<cv::Rect2d>>& queueTargetBboxesLeft,
+        std::queue<std::vector<int>>& queueUpdateLabels_left, std::queue<bool>& queueYolo_tracker2seq_left, std::queue<bool>& queueYolo_seq2tri_left)
     {
         int frameIndex;
         std::vector<int> classesCurrentLeft; // latest classes
         std::vector<cv::Rect2d> bboxesLeft;  // latest datas
         /* get tracking data fromt TM */
-        bool ret = getTargetData(frameIndex, classesCurrentLeft, bboxesLeft,queueTargetFrameIndex_left,queueTargetClassIndexesLeft,queueTargetBboxesLeft);
+        bool ret = getTargetData(frameIndex, classesCurrentLeft, bboxesLeft, queueTargetFrameIndex_left, queueTargetClassIndexesLeft, queueTargetBboxesLeft);
         /* data available */
         if (ret)
         {
@@ -49,6 +52,12 @@ public:
                 addData(classesLeft, dataLeft, dataCurrentLeft, classesCurrentLeft); // classesLeft and dataLeft is storage, dataCurrentLeft is latest data, and updatedClassesLeft is new class list
                 //new data added
                 if (!dataCurrentLeft.empty()) queueUpdateLabels_left.push(classesLeft.back());
+                if (!queueYolo_tracker2seq_left.empty())
+                {
+                    bool boolYolo = queueYolo_tracker2seq_left.front();
+                    queueYolo_tracker2seq_left.pop();
+                    if (boolYolo) queueYolo_seq2tri_left.push(true);
+                }
             }
             /* past data doesn't exist */
             else
@@ -72,10 +81,17 @@ public:
                 }
                 classesLeft.push_back(newClasses);
                 //new data added
-                if (!dataCurrentLeft.empty()) 
-                { 
+                if (!dataCurrentLeft.empty())
+                {
                     if (!queueUpdateLabels_left.empty()) queueUpdateLabels_left.pop();
                     queueUpdateLabels_left.push(newClasses); //updated class labels for letting matching.h match data in both images
+                }
+                if (!queueYolo_tracker2seq_left.empty())
+                {
+                    bool boolYolo = queueYolo_tracker2seq_left.front();
+                    queueYolo_tracker2seq_left.pop();
+                    if (boolYolo) queueYolo_seq2tri_left.push(true);
+                }
             }
         }
         /* data isn't available */
@@ -85,26 +101,26 @@ public:
         }
     }
 
-    bool getTargetData(int& frameIndex, std::vector<int>& classesLeft, std::vector<cv::Rect2d>& bboxesLeft,
-                        std::queue<int>& queueTargetFrameIndex_left, std::queue<std::vector<int>>& queueTargetClassIndexesLeft, std::queue<std::vector<cv::Rect2d>>& queueTargetBboxesLeft)
+    bool getTargetData(int& frameIndex, std::vector<int>&classesLeft, std::vector<cv::Rect2d>&bboxesLeft,
+            std::queue<int>&queueTargetFrameIndex_left, std::queue<std::vector<int>>&queueTargetClassIndexesLeft, std::queue<std::vector<cv::Rect2d>>&queueTargetBboxesLeft)
     {
-        //std::unique_lock<std::mutex> lock(mtxTarget); // Lock the mutex
-        /* both data is available */
-        bool ret = false;
-        if (!queueTargetBboxesLeft.empty())
-        {
-            frameIndex = queueTargetFrameIndex_left.front();
-            classesLeft = queueTargetClassIndexesLeft.front();
-            bboxesLeft = queueTargetBboxesLeft.front();
-            queueTargetFrameIndex.pop();
-            queueTargetClassIndexesLeft.pop();
-            queueTargetBboxesLeft.pop();
-            ret = true;
-        }
-        return ret;
+            //std::unique_lock<std::mutex> lock(mtxTarget); // Lock the mutex
+            /* both data is available */
+            bool ret = false;
+            if (!queueTargetBboxesLeft.empty())
+            {
+                frameIndex = queueTargetFrameIndex_left.front();
+                classesLeft = queueTargetClassIndexesLeft.front();
+                bboxesLeft = queueTargetBboxesLeft.front();
+                queueTargetFrameIndex.pop();
+                queueTargetClassIndexesLeft.pop();
+                queueTargetBboxesLeft.pop();
+                ret = true;
+            }
+            return ret;
     }
 
-    void convertRoi2Center(std::vector<int>& classes, std::vector<cv::Rect2d>& bboxes, const int& frameIndex, std::vector<std::vector<int>>& newData)
+    void convertRoi2Center(std::vector<int>&classes, std::vector<cv::Rect2d>&bboxes, const int& frameIndex, std::vector<std::vector<int>>&newData)
     {
         int counterRoi = 0;
         for (const int& classIndex : classes)
@@ -125,8 +141,8 @@ public:
         }
     }
 
-    void addData(std::vector<std::vector<int>>& classes, std::vector<std::vector<std::vector<int>>>& data,
-        std::vector<std::vector<int>>& dataCurrent, std::vector<int>& classesCurrent)
+    void addData(std::vector<std::vector<int>>&classes, std::vector<std::vector<std::vector<int>>>&data,
+        std::vector<std::vector<int>>&dataCurrent, std::vector<int>&classesCurrent)
     {
         int counterPastClass = 0;                      // for counting past data
         int counterPastTracker = 0;                    // for counting past class
@@ -203,6 +219,6 @@ public:
         classes.push_back(newClasses);
     }
 
-};
+    };
 
 #endif

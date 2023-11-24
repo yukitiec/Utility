@@ -6,35 +6,12 @@
 #include "stdafx.h";
 #include "global_parameters.h";
 
-
-// left cam
-extern std::queue<std::vector<cv::Mat1b>> queueYoloTemplateLeft; // queue for yolo template : for real cv::Mat type
-extern std::queue<std::vector<cv::Rect2d>> queueYoloBboxLeft;    // queue for yolo bbox
-extern std::queue<std::vector<cv::Mat1b>> queueTMTemplateLeft;   // queue for templateMatching template img : for real cv::Mat
-extern std::queue<std::vector<cv::Rect2d>> queueTMBboxLeft;      // queue for templateMatching bbox
-extern std::queue<std::vector<int>> queueYoloClassIndexLeft;     // queue for class index
-extern std::queue<std::vector<int>> queueTMClassIndexLeft;       // queue for class index
-extern std::queue<std::vector<bool>> queueTMScalesLeft;          // queue for search area scale
-extern std::queue<bool> queueLabelUpdateLeft;                    // for updating labels of sequence data
-//std::queue<int> queueNumLabels;                           // current labels number -> for maintaining label number consistency
-extern std::queue<bool> queueStartYolo; //if new Yolo inference can start
-
-// right cam
-extern std::queue<std::vector<cv::Mat1b>> queueYoloTemplateRight; // queue for yolo template : for real cv::Mat type
-extern std::queue<std::vector<cv::Rect2d>> queueYoloBboxRight;    // queue for yolo bbox
-extern std::queue<std::vector<cv::Mat1b>> queueTMTemplateRight;   // queue for templateMatching template img : for real cv::Mat
-extern std::queue<std::vector<cv::Rect2d>> queueTMBboxRight;      // queue for TM bbox
-extern std::queue<std::vector<int>> queueYoloClassIndexRight;     // queue for class index
-extern std::queue<std::vector<int>> queueTMClassIndexRight;       // queue for class index
-extern std::queue<std::vector<bool>> queueTMScalesRight;          // queue for search area scale
-extern std::queue<bool> queueLabelUpdateRight;                    // for updating labels of sequence data
-
-// 3D positioning ~ trajectory prediction
-extern std::queue<int> queueTargetFrameIndex;                      // TM estimation frame
-extern std::queue<std::vector<cv::Rect2d>> queueTargetBboxesLeft;  // bboxes from template matching for predict objects' trajectory
-extern std::queue<std::vector<cv::Rect2d>> queueTargetBboxesRight; // bboxes from template matching for predict objects' trajectory
-extern std::queue<std::vector<int>> queueTargetClassIndexesLeft;   // class from template matching for maintain consistency
-extern std::queue<std::vector<int>> queueTargetClassIndexesRight;  // class from template matching for maintain consistency
+extern std::vector<std::vector<std::vector<int>>> data_3d; //3d data from triangulation.h
+extern std::queue<bool> queue_tri2predict;
+extern const int numObjects;
+/* UR catching point */
+extern const int TARGET_DEPTH; // catching point is 40 cm away from camera position
+extern const std::string file_target;
 
 class Prediction
 {
@@ -42,6 +19,83 @@ public:
     Prediction()
     {
         std::cout << "construct Prediction class" << std::endl;
+    }
+
+    void main()
+    {
+        Utility utPre;//constructor
+        while (true)
+        {
+            if (!queue_tri2predict.empty()) break;
+            //std::cout << "wait for target data" << std::endl;
+        }
+        std::cout << "start calculating 3D position" << std::endl;
+
+        int counterIteration = 0;
+        int counterFinish = 0;
+        int counter = 0;//counter before delete new data
+        std::vector<std::vector<std::vector<int>>> targetPoint(numObjects);//{num of objects, sequence, {targetFrame, targetX, targetY, targetZ}
+        while (true) // continue until finish
+        {
+            counterIteration++;
+            if (queueFrame.empty() && queue_tri2predict.empty())
+            {
+                if (counterFinish == 10) break;
+                counterFinish++;
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                std::cout << "By finish : remain count is " << (10 - counterFinish) << std::endl;
+                continue;
+            }
+            else
+            {
+                /* new detection data available */
+                if (!queue_tri2predict.empty())
+                {
+                    counter = 0; //reset
+                    auto start = std::chrono::high_resolution_clock::now();
+                    std::cout << "start 3d prediction" << std::endl;
+                    int it = 0;
+                    for (std::vector<std::vector<int>>& data : data_3d)
+                    {
+                        if (data.size()>=3)
+                        {
+                            predictTargets(it, data, targetPoint);
+                        }
+                        it++;
+                    }
+
+                }
+                /* at least one data can't be available -> delete data */
+                else
+                {
+                    //nothing to do
+                }
+            }
+        }
+        std::cout << "***triangulation data***" << std::endl;
+        utPre.save3d(targetPoint, file_target);
+    }
+
+    void predictTargets(int& index, std::vector<std::vector<int>>& data, std::vector<std::vector<std::vector<int>>>& targets3D)
+    {
+        
+        /* trajectoryPrediction */
+        std::vector<float> coefX, coefY, coefZ;
+        linearRegression(data, coefX);
+        linearRegressionZ(data, coefZ);
+        curveFitting(data, coefY);
+        /* objects move */
+        if (coefZ[0] < 0) // moving forward to camera
+        {
+            int frameTarget = (int)((TARGET_DEPTH - coefZ[1]) / coefZ[0]);
+            int xTarget = (int)(coefX[0] * frameTarget + coefX[1]);
+            int yTarget = (int)(coefY[0] * frameTarget * frameTarget + coefY[1] * frameTarget + coefY[2]);
+            //not empty
+            if (!targets3D.empty()) targets3D.at(index).push_back({ frameTarget, xTarget, yTarget, TARGET_DEPTH }); // push_back target position
+            //empty
+            else targets3D.at(index) = { {frameTarget, xTarget, yTarget, TARGET_DEPTH} };
+            std::cout << "target is : ( frameTarget :  " << frameTarget << ", xTarget : " << xTarget << ", yTarget : " << yTarget << ", depthTarget : " << TARGET_DEPTH << std::endl;
+        }
     }
 
     void linearRegression(const std::vector<std::vector<int>>& data, std::vector<float>& result_x)

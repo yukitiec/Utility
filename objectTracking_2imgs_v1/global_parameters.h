@@ -29,6 +29,9 @@ extern const cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 179, 0, 160, // f
     );
 extern const cv::Mat distCoeffs = (cv::Mat_<double>(1, 5) << 1, 1, 1, 1, 1);
 
+//3d objects number
+extern const int numObjects;
+
 /* UR catching point */
 extern const int TARGET_DEPTH = 400; // catching point is 40 cm away from camera position
 
@@ -45,10 +48,17 @@ extern const std::string file_tm_bbox_right = "tm_bbox_test300fpsmp4_right.csv";
 extern const std::string file_tm_class_right = "tm_class_test300fpsmp4_right.csv";
 extern const std::string file_seq_bbox_right = "seqData_bbox_test300fpsmp4_right.csv";
 extern const std::string file_seq_class_right = "seqData_class_test300fpsmp4_right.csv";
+extern const std::string file_3d = "triangulation.csv";
+extern const std::string file_target = "target.csv";
 
 // queue definition
 std::queue<std::array<cv::Mat1b, 2>> queueFrame; // queue for frame
 std::queue<int> queueFrameIndex;  // queue for frame index
+
+//Yolo signals
+std::queue<bool> queueYolo_tracker2seq_left,queueYolo_tracker2seq_right;
+std::queue<bool> queueYolo_seq2tri_left, queueYolo_seq2tri_right;
+std::queue<bool> queue_tri2predict;
 
 //mosse
 std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerYolo_left;
@@ -80,7 +90,7 @@ std::queue<std::vector<bool>> queueTMScalesRight;          // queue for search a
 std::queue<bool> queueLabelUpdateRight;                    // for updating labels of sequence data
 
 // sequential data
-std::vector<std::vector<std::vector<int>>> seqData_left,seqData_right; //storage for sequential data
+std::vector<std::vector<std::vector<int>>> seqData_left, seqData_right; //storage for sequential data
 std::queue<int> queueTargetFrameIndex_left;                      // TM estimation frame
 std::queue<int> queueTargetFrameIndex_right;                      // TM estimation frame
 std::queue<std::vector<cv::Rect2d>> queueTargetBboxesLeft;  // bboxes from template matching for predict objects' trajectory

@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "yolo.h"
+#include "yolo_batch.h"
 #include "tracker.h"
 #include "utility.h"
 #include "sequence.h"
@@ -19,6 +19,10 @@ extern const std::string file_tm_bbox_right;
 extern const std::string file_tm_class_right;
 extern const std::string file_seq_bbox_right;
 extern const std::string file_seq_class_right;
+
+//Yolo signals
+std::queue<bool> queueYolo_tracker2seq_left, queueYolo_tracker2seq_right;
+std::queue<bool> queueYolo_seq2tri_left, queueYolo_seq2tri_right;
 
 // tracker
 extern const bool boolMOSSE;
@@ -58,7 +62,7 @@ extern std::queue<std::vector<bool>> queueTMScalesRight;          // queue for s
 extern std::queue<bool> queueLabelUpdateRight;                    // for updating labels of sequence data
 
 // for saving sequence data
-extern std::vector<std::vector<std::vector<int>>> seqData_left,seqData_right; //storage for sequential data
+extern std::vector<std::vector<std::vector<int>>> seqData_left, seqData_right; //storage for sequential data
 extern std::queue<int> queueTargetFrameIndex_left;                      // TM estimation frame
 extern std::queue<int> queueTargetFrameIndex_right;
 extern std::queue<std::vector<cv::Rect2d>> queueTargetBboxesLeft;  // bboxes from template matching for predict objects' trajectory
@@ -91,7 +95,7 @@ void yoloDetect()
 
      // YoloDetector initialization
     //YOLODetect yolodetectorLeft;
-    YOLODetect_batch yolodetect
+    YOLODetect_batch yolodetect;
     Utility utYolo;
     //std::cout << "yolo initialization has finished" << std::endl;
     /* initialization */
@@ -133,14 +137,14 @@ void yoloDetect()
     //detectedFrame
     //left
     std::vector<int> detectedFrameLeft;
-    detectedFrame.reserve(300);
+    detectedFrameLeft.reserve(300);
     std::vector<int> detectedFrameClassLeft;
-    detectedFrame.reserve(300);
+    detectedFrameClassLeft.reserve(300);
     //right
     std::vector<int> detectedFrameRight;
-    detectedFrame.reserve(300);
+    detectedFrameRight.reserve(300);
     std::vector<int> detectedFrameClassRight;
-    detectedFrame.reserve(300);
+    detectedFrameClassRight.reserve(300);
     int frameIndex;
     int countIteration = 0;
     /* while queueFrame is empty wait until img is provided */
@@ -148,7 +152,7 @@ void yoloDetect()
     while (true)
     {
         auto start = std::chrono::high_resolution_clock::now();
-        std::array<cv::Mat1b,2> imgs;
+        std::array<cv::Mat1b, 2> imgs;
         int frameIndex;
         bool boolImgs = utYolo.getImagesFromQueueYolo(imgs, frameIndex);
         if (!boolImgs)
@@ -169,8 +173,8 @@ void yoloDetect()
         std::cout << " YOLO -- " << countIteration << " -- " << std::endl;
 
         /*start yolo detection */
-        yolodetector.detect(concatFrame, frameIndex, posSaverYoloLeft,posSaverYoloRight, classSaverYoloLeft, classSaverYoloRight, 
-                            detectedFrameLeft, detectedFrameRight, detectedFrameClassLeft,detectedFrameClassRight, countIteration);
+        yolodetector.detect(concatFrame, frameIndex, posSaverYoloLeft, posSaverYoloRight, classSaverYoloLeft, classSaverYoloRight,
+            detectedFrameLeft, detectedFrameRight, detectedFrameClassLeft, detectedFrameClassRight, countIteration);
         auto stop = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
         std::cout << " Time taken by YOLO detection : " << duration.count() << " milliseconds" << std::endl;
@@ -180,14 +184,14 @@ void yoloDetect()
     std::cout << "position saver : Yolo : " << std::endl;
     std::cout << " : Left : " << std::endl;
     std::cout << "posSaverYoloLeft size:" << posSaverYoloLeft.size() << ", detectedFrame size:" << detectedFrameLeft.size() << std::endl;
-    utYolo.checkStorage(posSaverYoloLeft, detectedFrameLeft,file_yolo_bbox_left);
+    utYolo.checkStorage(posSaverYoloLeft, detectedFrameLeft, file_yolo_bbox_left);
     std::cout << "classSaverYoloLeft size:" << classSaverYoloLeft.size() << ", detectedFrameClass size:" << detectedFrameClassLeft.size() << std::endl;
-    utYolo.checkClassStorage(classSaverYoloLeft, detectedFrameClassLeft,file_yolo_class_left);
+    utYolo.checkClassStorage(classSaverYoloLeft, detectedFrameClassLeft, file_yolo_class_left);
     std::cout << " : Right : " << std::endl;
     std::cout << "posSaverYoloRight size:" << posSaverYoloRight.size() << ", detectedFrame size:" << detectedFrameRight.size() << std::endl;
-    utYolo.checkStorage(posSaverYoloRight, detectedFrameRight,file_yolo_bbox_right);
+    utYolo.checkStorage(posSaverYoloRight, detectedFrameRight, file_yolo_bbox_right);
     std::cout << "classSaverYoloLeft size:" << classSaverYoloRight.size() << ", detectedFrameClass size:" << detectedFrameClassRight.size() << std::endl;
-    utYolo.checkClassStorage(classSaverYoloRight, detectedFrameClassRight,file_yolo_class_right);
+    utYolo.checkClassStorage(classSaverYoloRight, detectedFrameClassRight, file_yolo_class_right);
 }
 
 
@@ -259,7 +263,7 @@ void templateMatching() // void*
         countIteration++;
         std::cout << " -- " << countIteration << " -- " << std::endl;
         // get img from queue
-        std::array<cv::Mat1b,2> imgs;
+        std::array<cv::Mat1b, 2> imgs;
         int frameIndex;
         bool boolImgs = utTM.getImagesFromQueueTM(imgs, frameIndex);
         //std::cout << "get imgs" << std::endl;
@@ -282,14 +286,14 @@ void templateMatching() // void*
         bool boolLeft = false;
         /*start template matching process */
         auto start = std::chrono::high_resolution_clock::now();
-        std::thread thread_left(&TemplateMatching::templateMatching, tm, std::ref(frame_left),std::ref(frameIndex),std::ref(posSaverLeft),std::ref(classSaverLeft),std::ref(detectedFrameLeft),std::ref(detectedFrameClassLeft),
-                                std::ref(queueTMClassIndexLeft),std::ref(queueTMBboxLeft),std::ref(queueTMTemplateLeft),std::ref(queueTrackerMOSSE_left),std::ref(queueTMScalesLeft),
-                                std::ref(queueYoloClassIndexLeft),std::ref(queueYoloBboxLeft),std::ref(queueYoloTemplateLeft),std::ref(queueTrackerYolo_left),
-                                std::ref(queueTargetFrameIndex_left),std::ref(queueTargetClassINdexesLeft),std::ref(queueTargetBboxesLeft));
-        std::thread thread_right(&TemplateMatching::templateMatching, tm, std::ref(frame_right),std::ref(frameIndex),std::ref(posSaverRight),std::ref(classSaverRight),std::ref(detectedFrameRight),std::ref(detectedFrameClassRight),
-                                std::ref(queueTMClassIndexRight),std::ref(queueTMBboxRight),std::ref(queueTMTemplateRight),std::ref(queueTrackerMOSSE_right),std::ref(queueTMScalesRight),
-                                std::ref(queueYoloClassIndexRight),std::ref(queueYoloBboxRight),std::ref(queueYoloTemplateRight),std::ref(queueTrackerYolo_right),
-                                std::ref(queueTargetFrameIndex_right),std::ref(queueTargetClassINdexesRight),std::ref(queueTargetBboxesRight));
+        std::thread thread_left(&TemplateMatching::templateMatching, tm, std::ref(frame_left), std::ref(frameIndex), std::ref(posSaverLeft), std::ref(classSaverLeft), std::ref(detectedFrameLeft), std::ref(detectedFrameClassLeft),
+            std::ref(queueTMClassIndexLeft), std::ref(queueTMBboxLeft), std::ref(queueTMTemplateLeft), std::ref(queueTrackerMOSSE_left), std::ref(queueTMScalesLeft),
+            std::ref(queueYoloClassIndexLeft), std::ref(queueYoloBboxLeft), std::ref(queueYoloTemplateLeft), std::ref(queueTrackerYolo_left),std::ref(queueStartYolo_left),
+            std::ref(queueTargetFrameIndex_left), std::ref(queueTargetClassIndexesLeft), std::ref(queueTargetBboxesLeft),std::ref(queueYolo_tracker2seq_left));
+        std::thread thread_right(&TemplateMatching::templateMatching, tm, std::ref(frame_right), std::ref(frameIndex), std::ref(posSaverRight), std::ref(classSaverRight), std::ref(detectedFrameRight), std::ref(detectedFrameClassRight),
+            std::ref(queueTMClassIndexRight), std::ref(queueTMBboxRight), std::ref(queueTMTemplateRight), std::ref(queueTrackerMOSSE_right), std::ref(queueTMScalesRight),
+            std::ref(queueYoloClassIndexRight), std::ref(queueYoloBboxRight), std::ref(queueYoloTemplateRight), std::ref(queueTrackerYolo_right), std::ref(queueStartYolo_right),
+            std::ref(queueTargetFrameIndex_right), std::ref(queueTargetClassIndexesRight), std::ref(queueTargetBboxesRight), std::ref(queueYolo_tracker2seq_right));
         thread_left.join();
         thread_right.join();
         auto stop = std::chrono::high_resolution_clock::now();
@@ -300,16 +304,16 @@ void templateMatching() // void*
     std::cout << "position saver : TM : " << std::endl;
     std::cout << " : Left : " << std::endl;
     std::cout << "posSaverTMLeft size:" << posSaverTMLeft.size() << ", detectedFrame size:" << detectedFrameLeft.size() << std::endl;
-    utTM.checkStorageTM(posSaverTMLeft, detectedFrameLeft,file_tm_bbox_left);
+    utTM.checkStorageTM(posSaverTMLeft, detectedFrameLeft, file_tm_bbox_left);
     std::cout << "Class saver : TM : " << std::endl;
     std::cout << "classSaverTMLeft size:" << classSaverTMLeft.size() << ", detectedFrameClass size:" << detectedFrameClassLeft.size() << std::endl;
-    utTM.checkClassStorageTM(classSaverTMLeft, detectedFrameClassLeft,file_tm_class_left);
+    utTM.checkClassStorageTM(classSaverTMLeft, detectedFrameClassLeft, file_tm_class_left);
     std::cout << " : Right : " << std::endl;
     std::cout << "posSaverTMRight size:" << posSaverTMRight.size() << ", detectedFrame size:" << detectedFrameRight.size() << std::endl;
-    utTM.checkStorageTM(posSaverTMRight, detectedFrameRight,file_tm_bbox_right);
+    utTM.checkStorageTM(posSaverTMRight, detectedFrameRight, file_tm_bbox_right);
     std::cout << "Class saver : TM : " << std::endl;
     std::cout << "classSaverTMRight size:" << classSaverTMRight.size() << ", detectedFrameClass size:" << detectedFrameClassRight.size() << std::endl;
-    utTM.checkClassStorageTM(classSaverTMRight, detectedFrameClassRight,file_tm_class_right);
+    utTM.checkClassStorageTM(classSaverTMRight, detectedFrameClassRight, file_tm_class_right);
 }
 
 void sequence()
@@ -317,7 +321,7 @@ void sequence()
     Sequence seq; //sequential data
     Utility utSeq; //check data
 
-    std::vector<std::vector<int>> seqClasses_left,seqClasses_right; // storage for sequential classes
+    std::vector<std::vector<int>> seqClasses_left, seqClasses_right; // storage for sequential classes
 
     while (true)
     {
@@ -345,10 +349,10 @@ void sequence()
             if (!queueTargetBboxesLeft.empty())
             {
                 auto start = std::chrono::high_resolution_clock::now();
-                std::thread thread_left(&Sequence::updateData,seq,std::ref(seqData_left),std::ref(seqClasses_left),std::ref(queueTargetFrameIndex_left),
-                                        std::ref(queueTargetClassIndexesLeft), std::ref(queueTargetBboxesLeft),std::ref(queueUpdateLabels_left));
-                std::thread thread_left(&Sequence::updateData,seq,std::ref(seqData_right),std::ref(seqClasses_right),std::ref(queueTargetFrameIndex_right),
-                                        std::ref(queueTargetClassIndexesRight), std::ref(queueTargetBboxesRight),std::ref(queueUpdateLabels_right))
+                std::thread thread_left(&Sequence::updateData, seq, std::ref(seqData_left), std::ref(seqClasses_left), std::ref(queueTargetFrameIndex_left),
+                    std::ref(queueTargetClassIndexesLeft), std::ref(queueTargetBboxesLeft), std::ref(queueUpdateLabels_left), std::ref(queueYolo_tracker2seq_left), std::ref(queueYolo_seq2tri_left));
+                std::thread thread_left(&Sequence::updateData, seq, std::ref(seqData_right), std::ref(seqClasses_right), std::ref(queueTargetFrameIndex_right),
+                    std::ref(queueTargetClassIndexesRight), std::ref(queueTargetBboxesRight), std::ref(queueUpdateLabels_right), std::ref(queueYolo_tracker2seq_right), std::ref(queueYolo_seq2tri_right))
                 thread_left.join();
                 thread_right.join();
                 auto stop = std::chrono::high_resolution_clock::now();
@@ -362,11 +366,11 @@ void sequence()
             }
         }
     }
-    std::cout<<"sequential data"<<std::endl;
-    std::cout<<"LEFT"<<std::endl;
-    utSeq.checkSeqData(seqData_left, seqClasses_left,file_seq_left);
-    std::cout<<"RIGHT"<<std::endl;
-    utSeq.checkSeqData(seqData_right,seqClasses_right,file_seq_right);
+    std::cout << "sequential data" << std::endl;
+    std::cout << "LEFT" << std::endl;
+    utSeq.checkSeqData(seqData_left, seqClasses_left, file_seq_left);
+    std::cout << "RIGHT" << std::endl;
+    utSeq.checkSeqData(seqData_right, seqClasses_right, file_seq_right);
 }
 
 /* main function */

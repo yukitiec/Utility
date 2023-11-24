@@ -13,7 +13,7 @@ extern const std::string file_tm_class;
 extern const std::string file_seq_bbox;
 extern const std::string file_seq_class;
 // queue definition
-extern std::queue<std::array<cv::Mat1b,2>> queueFrame; // queue for frame
+extern std::queue<std::array<cv::Mat1b, 2>> queueFrame; // queue for frame
 extern std::queue<int> queueFrameIndex;  // queue for frame index
 
 class Utility
@@ -24,7 +24,7 @@ public:
         std::cout << "construct Utility" << std::endl;
     }
 
-    bool getImagesFromQueueYolo(std::array<cv::Mat1b,2>& imgs, int& frameIndex)
+    bool getImagesFromQueueYolo(std::array<cv::Mat1b, 2>& imgs, int& frameIndex)
     {
         // std::unique_lock<std::mutex> lock(mtxImg); // Lock the mutex
         if (!queueFrame.empty())
@@ -39,7 +39,7 @@ public:
         return false;
     }
 
-    void checkStorage(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vector<int>& detectedFrame,std::string& fileName)
+    void checkStorage(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vector<int>& detectedFrame, std::string& fileName)
     {
 
         // Open the file for writing
@@ -77,7 +77,7 @@ public:
         outputFile.close();
     }
 
-    void checkClassStorage(std::vector<std::vector<int>>& classSaverYolo, std::vector<int>& detectedFrame,std::string& fileName)
+    void checkClassStorage(std::vector<std::vector<int>>& classSaverYolo, std::vector<int>& detectedFrame, std::string& fileName)
     {
         // Open the file for writing
         std::ofstream outputFile(fileName);
@@ -111,7 +111,7 @@ public:
         outputFile.close();
     }
 
-    void checkStorageTM(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vector<int>& detectedFrame,std::string& fileName)
+    void checkStorageTM(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vector<int>& detectedFrame, std::string& fileName)
     {
         // Open the file for writing
         std::ofstream outputFile(fileName);
@@ -148,7 +148,7 @@ public:
         outputFile.close();
     }
 
-    void checkClassStorageTM(std::vector<std::vector<int>>& classSaverYolo, std::vector<int>& detectedFrame,std::string& fileName)
+    void checkClassStorageTM(std::vector<std::vector<int>>& classSaverYolo, std::vector<int>& detectedFrame, std::string& fileName)
     {
         // Open the file for writing
         std::ofstream outputFile(fileName);
@@ -179,7 +179,7 @@ public:
         outputFile.close();
     }
 
-    void checkSeqData(std::vector<std::vector<std::vector<int>>>& dataLeft, std::vector<std::vector<int>>& classesLeft,std::string& fileName)
+    void checkSeqData(std::vector<std::vector<std::vector<int>>>& dataLeft, std::vector<std::vector<int>>& classesLeft, std::string& fileName)
     {
         // Open the file for writing
         /* bbox data */
@@ -248,8 +248,43 @@ public:
         outputFile_class.close();
     }
 
+    void save3d(std::vector<std::vector<std::vector<int>>>& posSaver, const std::string& file)
+    {
+        // Open the file for writing
+        std::ofstream outputFile(file);
+        if (!outputFile.is_open())
+        {
+            std::cerr << "Error: Could not open the file." << std::endl;
+        }
+        std::cout << "estimated position :: Optical Flow :: " << std::endl;
+        /*num of objects */
+        for (int i = 0; i < posSaver.size(); i++)
+        {
+            std::cout << i << "-th objects :: " << std::endl;
+            /*num of sequence*/
+            for (int j = 0; j < posSaver[i].size(); j++)
+            {
+                std::cout << j << "-th timestep :: frameIndex=" << posSaver[i][j][0] << ", x=" << posSaver[i][j][1]<<", y=" << posSaver[i][j][2] << ", z=" << posSaver[i][j][3] << std::endl;
+                outputFile << posSaver[i][j][0];
+                outputFile << ",";
+                outputFile << posSaver[i][j][1];
+                outputFile << ",";
+                outputFile << posSaver[i][j][2];
+                outputFile << ",";
+                outputFile << posSaver[i][j][3];
+                if (j != posSaver[i].size() - 1)
+                {
+                    outputFile << ",";
+                }
+            }
+            outputFile << "\n";
+        }
+        // close file
+        outputFile.close();
+    }
 
-    bool getImagesFromQueueTM(std::array<cv::Mat1b,2>& imgs, int& frameIndex)
+
+    bool getImagesFromQueueTM(std::array<cv::Mat1b, 2>& imgs, int& frameIndex)
     {
         // std::unique_lock<std::mutex> lock(mtxImg); // Lock the mutex
         if (queueFrame.empty() || queueFrameIndex.empty())
@@ -269,7 +304,7 @@ public:
     }
 
     /* read imgs */
-    void pushFrame(std::array<cv::Mat1b,2>& src, const int frameIndex)
+    void pushFrame(std::array<cv::Mat1b, 2>& src, const int frameIndex)
     {
         // std::unique_lock<std::mutex> lock(mtxImg); // Lock the mutex
         //  std::cout << "push imgs" << std::endl;
@@ -312,4 +347,3 @@ public:
 };
 
 #endif
-
