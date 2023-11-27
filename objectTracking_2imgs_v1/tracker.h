@@ -84,10 +84,10 @@ public:
     void templateMatching(cv::Mat1b& img, const int& frameIndex,
         std::vector<std::vector<cv::Rect2d>>& posSaver, std::vector<std::vector<int>>& classSaver, std::vector<int>& detectedFrame, std::vector<int>& detectedFrameClass,
         std::queue<std::vector<int>>& queueTMClassIndexLeft, std::queue<std::vector<cv::Rect2d>>& queueTMBboxLeft,
-        std::queue<std::vector<cv::Mat1b>>& queueTMTemplateLeft, std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>& queueTrackerMOSSE_left, std::queue<std::vector<bool>>& queueTMScalesLeft,
+        std::queue<std::vector<cv::Mat1b>>& queueTMTemplateLeft, std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>>& queueTrackerMOSSE_left, std::queue<std::vector<bool>>& queueTMScalesLeft,
         std::queue<std::vector<int>>& queueYoloClassIndexLeft, std::queue<std::vector<cv::Rect2d>>& queueYoloBboxLeft, 
-        std::queue<std::vector<cv::Mat1b>>& queueYoloTemplateLeft, std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>> queueTrackerYolo_left,std::queue<bool> queueStartYolo,
-        std::queue<int> queueTargetFrameIndex_left, std::queue<std::vector<int>>& queueTargetClassIndexesLeft, std::queue<std::vector<cv::Rect2d>>& queueTargetBboxesLeft, std::queue<bool>& queueYolo_tracker2seq_left
+        std::queue<std::vector<cv::Mat1b>>& queueYoloTemplateLeft, std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>>& queueTrackerYolo_left,std::queue<bool>& queueStartYolo,
+        std::queue<int>& queueTargetFrameIndex_left, std::queue<std::vector<int>>& queueTargetClassIndexesLeft, std::queue<std::vector<cv::Rect2d>>& queueTargetBboxesLeft, std::queue<bool>& queueYolo_tracker2seq_left
     )
     {
         // for updating templates
@@ -121,7 +121,7 @@ public:
         //Template matching
         else getTemplateMatchingDataLeft(boolTrackerTM, classIndexTMLeft, bboxesTM, templatesTM, boolScalesTM, numTrackersTM, queueTMClassIndexLeft, queueTMBboxLeft, queueTMTemplateLeft, queueTMScalesLeft);
 
-        //std::cout << "get previous tracking data" << std::endl;
+        std::cout << "get previous tracking data" << std::endl;
         // template from yolo is available
         bool boolTrackerYolo = false;
         /* Yolo Template is availble */
@@ -129,7 +129,7 @@ public:
         if (boolMOSSE)
         {
             //std::cout << "MOSSE data" << std::endl;
-            //std::cout << "queueTrackerYolo_left size =" << queueTrackerYolo_left.size() << std::endl;
+            std::cout << "queueTrackerYolo_left size =" << queueTrackerYolo_left.size() << std::endl;
             if (!queueTrackerYolo_left.empty())
             {
                 /* get Yolo data and update Template matchin data */
@@ -170,7 +170,7 @@ public:
                 // nothing to do
             }
         }
-        //std::cout << "BoolTrackerTM :" << boolTrackerTM << ", boolTrackerYolo : " << boolTrackerYolo << std::endl;
+        std::cout << "BoolTrackerTM :" << boolTrackerTM << ", boolTrackerYolo : " << boolTrackerYolo << std::endl;
         /*  Template Matching Process */
         if (boolTrackerTM || boolTrackerYolo)
         {
@@ -217,7 +217,7 @@ public:
                 queueTMBboxLeft.push(updatedBboxesTM); // push roi
                 posSaver.push_back(updatedBboxesTM);     // save current position to the vector
                 //sequence data
-                if (!queueTargetFrameIndex.empty()) queueTargetFrameIndex.pop();
+                if (!queueTargetFrameIndex_left.empty()) queueTargetFrameIndex_left.pop();
                 if (!queueTargetClassIndexesLeft.empty()) queueTargetClassIndexesLeft.pop();
                 if (!queueTargetBboxesLeft.empty()) queueTargetBboxesLeft.pop();
                 queueTargetFrameIndex_left.push(frameIndex);
@@ -307,7 +307,7 @@ public:
 
     void getMOSSEDataLeft(bool& boolTrackerTM, std::vector<int>& classIndexTMLeft, std::vector<cv::Rect2d>& bboxesTM, std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>& trackers_mosse, std::vector<bool>& boolScalesTM, int& numTrackersTM,
         std::queue<std::vector<int>>& queueTMClassIndexLeft, std::queue<std::vector<cv::Rect2d>>& queueTMBboxLeft,
-        std::queue < std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>& queueTrackerMOSSE_left, std::queue<std::vector<bool>>& queueTMScalesLeft)
+        std::queue < std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>>& queueTrackerMOSSE_left, std::queue<std::vector<bool>>& queueTMScalesLeft)
     {
         if (!queueTMClassIndexLeft.empty())
         {
@@ -354,7 +354,7 @@ public:
 
     void organizeData_mosse(std::vector<bool>& boolScalesTM, bool& boolTrackerYolo, std::vector<int>& classIndexTMLeft, std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>& trackers_mosse,
         std::vector<cv::Rect2d>& bboxesTM, std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>& updatedTrackers, std::vector<cv::Rect2d>& updatedBboxes, std::vector<int>& updatedClasses, int& numTrackersTM,
-        std::queue<std::vector<int>>& queueYoloClassIndexLeft, std::queue<std::vector<cv::Rect2d>>& queueYoloBboxLeft, std::queue<std::vector<cv::Mat1b>>& queueTrackerYolo_left)
+        std::queue<std::vector<int>>& queueYoloClassIndexLeft, std::queue<std::vector<cv::Rect2d>>& queueYoloBboxLeft, std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>>& queueTrackerYolo_left)
     {
         std::unique_lock<std::mutex> lock(mtxYoloLeft); // Lock the mutex
         //std::cout << "TM :: Yolo data is available" << std::endl;
@@ -393,7 +393,7 @@ public:
     }
 
     void getYoloDataLeft_mosse(std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>& newTrackers, std::vector<cv::Rect2d>& newBboxes, std::vector<int>& newClassIndexes,
-        std::queue<std::vector<int>>& queueYoloClassIndexLeft, std::queue<std::vector<cv::Rect2d>>& queueYoloBboxLeft, std::queue<std::vector<cv::Mat1b>>& queueTrackerYolo_left)
+        std::queue<std::vector<int>>& queueYoloClassIndexLeft, std::queue<std::vector<cv::Rect2d>>& queueYoloBboxLeft, std::queue<std::vector<cv::Ptr<cv::mytracker::TrackerMOSSE>>>& queueTrackerYolo_left)
     {
         newTrackers = queueTrackerYolo_left.front();
         newBboxes = queueYoloBboxLeft.front();

@@ -30,7 +30,7 @@ extern const cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 179, 0, 160, // f
 extern const cv::Mat distCoeffs = (cv::Mat_<double>(1, 5) << 1, 1, 1, 1, 1);
 
 //3d objects number
-extern const int numObjects;
+extern const int numObjects=50;
 
 /* UR catching point */
 extern const int TARGET_DEPTH = 400; // catching point is 40 cm away from camera position
@@ -51,7 +51,7 @@ extern const std::string file_seq_class_right = "seqData_class_test300fpsmp4_rig
 extern const std::string file_3d = "triangulation.csv";
 extern const std::string file_target = "target.csv";
 
-// queue definition
+// queue definitions
 std::queue<std::array<cv::Mat1b, 2>> queueFrame; // queue for frame
 std::queue<int> queueFrameIndex;  // queue for frame index
 

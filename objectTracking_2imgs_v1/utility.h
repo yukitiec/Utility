@@ -5,13 +5,6 @@
 
 #include "stdafx.h"
 
-/* file name setting */
-extern const std::string file_yolo_bbox;
-extern const std::string file_yolo_class;
-extern const std::string file_tm_bbox;
-extern const std::string file_tm_class;
-extern const std::string file_seq_bbox;
-extern const std::string file_seq_class;
 // queue definition
 extern std::queue<std::array<cv::Mat1b, 2>> queueFrame; // queue for frame
 extern std::queue<int> queueFrameIndex;  // queue for frame index
@@ -39,7 +32,7 @@ public:
         return false;
     }
 
-    void checkStorage(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vector<int>& detectedFrame, std::string& fileName)
+    void checkStorage(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vector<int>& detectedFrame, std::string fileName)
     {
 
         // Open the file for writing
@@ -77,7 +70,7 @@ public:
         outputFile.close();
     }
 
-    void checkClassStorage(std::vector<std::vector<int>>& classSaverYolo, std::vector<int>& detectedFrame, std::string& fileName)
+    void checkClassStorage(std::vector<std::vector<int>>& classSaverYolo, std::vector<int>& detectedFrame, std::string fileName)
     {
         // Open the file for writing
         std::ofstream outputFile(fileName);
@@ -111,7 +104,7 @@ public:
         outputFile.close();
     }
 
-    void checkStorageTM(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vector<int>& detectedFrame, std::string& fileName)
+    void checkStorageTM(std::vector<std::vector<cv::Rect2d>>& posSaverYolo, std::vector<int>& detectedFrame, std::string fileName)
     {
         // Open the file for writing
         std::ofstream outputFile(fileName);
@@ -148,7 +141,7 @@ public:
         outputFile.close();
     }
 
-    void checkClassStorageTM(std::vector<std::vector<int>>& classSaverYolo, std::vector<int>& detectedFrame, std::string& fileName)
+    void checkClassStorageTM(std::vector<std::vector<int>>& classSaverYolo, std::vector<int>& detectedFrame, std::string fileName)
     {
         // Open the file for writing
         std::ofstream outputFile(fileName);
@@ -179,11 +172,11 @@ public:
         outputFile.close();
     }
 
-    void checkSeqData(std::vector<std::vector<std::vector<int>>>& dataLeft, std::vector<std::vector<int>>& classesLeft, std::string& fileName)
+    void checkSeqData(std::vector<std::vector<std::vector<int>>>& dataLeft, std::vector<std::vector<int>>& classesLeft, std::string fileName_bbox, std::string fileName_class)
     {
         // Open the file for writing
         /* bbox data */
-        std::ofstream outputFile(fileName);
+        std::ofstream outputFile(fileName_bbox);
         std::vector<int> frameIndexes;
         frameIndexes.reserve(2000);
         if (!outputFile.is_open())
@@ -221,7 +214,7 @@ public:
         /* sort frame indexes */
         std::sort(frameIndexes.begin(), frameIndexes.end());
         /* bbox data */
-        std::ofstream outputFile_class(file_seq_class);
+        std::ofstream outputFile_class(fileName_class);
         if (!outputFile_class.is_open())
         {
             std::cerr << "Error: Could not open the file." << std::endl;
@@ -248,7 +241,7 @@ public:
         outputFile_class.close();
     }
 
-    void save3d(std::vector<std::vector<std::vector<int>>>& posSaver, const std::string& file)
+    void save3d(std::vector<std::vector<std::vector<int>>>& posSaver, const std::string file)
     {
         // Open the file for writing
         std::ofstream outputFile(file);
@@ -295,7 +288,6 @@ public:
         {
             imgs = queueFrame.front();
             frameIndex = queueFrameIndex.front();
-            queueTargetFrameIndex.push(frameIndex);
             // remove frame from queue
             queueFrame.pop();
             queueFrameIndex.pop();
@@ -339,8 +331,8 @@ public:
         {
             queueFrame.pop();
             queueFrameIndex.pop();
-            std::this_thread::sleep_for(std::chrono::microseconds(2000);
-            std::cout << "remove image" << std::endl;
+            std::this_thread::sleep_for(std::chrono::microseconds(2000));
+            //std::cout << "remove image" << std::endl;
         }
     }
 

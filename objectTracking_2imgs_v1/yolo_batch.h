@@ -1,6 +1,5 @@
 #pragma once
 
-
 #ifndef YOLO_BATCH_H
 #define YOLO_BATCH_H
 
@@ -39,6 +38,7 @@ extern std::queue<std::vector<int>> queueTMClassIndexRight;       // queue for c
 extern std::queue<std::vector<bool>> queueTMScalesRight;          // queue for search area scale
 extern std::queue<bool> queueLabelUpdateRight;                    // for updating labels of sequence data
 
+/*
 // 3D positioning ~ trajectory prediction
 extern std::queue<int> queueTargetFrameIndex_left;                      // TM estimation frame
 extern std::queue<int> queueTargetFrameIndex_right;
@@ -46,6 +46,7 @@ extern std::queue<std::vector<cv::Rect2d>> queueTargetBboxesLeft;  // bboxes fro
 extern std::queue<std::vector<cv::Rect2d>> queueTargetBboxesRight; // bboxes from template matching for predict objects' trajectory
 extern std::queue<std::vector<int>> queueTargetClassIndexesLeft;   // class from template matching for maintain consistency
 extern std::queue<std::vector<int>> queueTargetClassIndexesRight;  // class from template matching for maintain consistency
+*/
 
 /*  YOLO class definition  */
 class YOLODetect_batch
@@ -55,7 +56,7 @@ private:
     torch::DeviceType devicetype;
     torch::Device* device;
 
-    std::string yolofilePath = "yolov8m.torchscript";
+    std::string yolofilePath = "yolov8m_320_640.torchscript";
     const int originalWidth = 320;
     const int frameWidth = 640;
     const int frameHeight = 320;

@@ -4,7 +4,7 @@
  * @author Akira Matsuo (M2 student at GSII)
  * @date 2022-09-12
  */
-
+#include "stdafx.h"
 #include "mosse.h"
 
 namespace cv {

@@ -5,6 +5,7 @@
 #include "sequence.h"
 #include "prediction.h"
 #include "global_parameters.h"
+#include "triangulation.h"
 
 //saveFile
 extern const std::string file_yolo_bbox_left;
@@ -20,9 +21,13 @@ extern const std::string file_tm_class_right;
 extern const std::string file_seq_bbox_right;
 extern const std::string file_seq_class_right;
 
+// camera : constant setting
+extern const int LEFT_CAMERA;
+extern const int RIGHT_CAMERA;
+
 //Yolo signals
-std::queue<bool> queueYolo_tracker2seq_left, queueYolo_tracker2seq_right;
-std::queue<bool> queueYolo_seq2tri_left, queueYolo_seq2tri_right;
+extern std::queue<bool> queueYolo_tracker2seq_left, queueYolo_tracker2seq_right;
+extern std::queue<bool> queueYolo_seq2tri_left, queueYolo_seq2tri_right;
 
 // tracker
 extern const bool boolMOSSE;
@@ -95,7 +100,7 @@ void yoloDetect()
 
      // YoloDetector initialization
     //YOLODetect yolodetectorLeft;
-    YOLODetect_batch yolodetect;
+    YOLODetect_batch yolo;
     Utility utYolo;
     //std::cout << "yolo initialization has finished" << std::endl;
     /* initialization */
@@ -152,9 +157,9 @@ void yoloDetect()
     while (true)
     {
         auto start = std::chrono::high_resolution_clock::now();
-        std::array<cv::Mat1b, 2> imgs;
+        std::array<cv::Mat1b, 2> frames;
         int frameIndex;
-        bool boolImgs = utYolo.getImagesFromQueueYolo(imgs, frameIndex);
+        bool boolImgs = utYolo.getImagesFromQueueYolo(frames, frameIndex);
         if (!boolImgs)
         {
             if (counterFinish > 10)
@@ -169,11 +174,11 @@ void yoloDetect()
         }
         //concatenate 2 imgs horizontally
         cv::Mat1b concatFrame;
-        cv::hconcat(frames[LEFT], frames[RIGHT], concatFrame);
+        cv::hconcat(frames[LEFT_CAMERA], frames[RIGHT_CAMERA], concatFrame);
         std::cout << " YOLO -- " << countIteration << " -- " << std::endl;
 
         /*start yolo detection */
-        yolodetector.detect(concatFrame, frameIndex, posSaverYoloLeft, posSaverYoloRight, classSaverYoloLeft, classSaverYoloRight,
+        yolo.detect(concatFrame, frameIndex, posSaverYoloLeft, posSaverYoloRight, classSaverYoloLeft, classSaverYoloRight,
             detectedFrameLeft, detectedFrameRight, detectedFrameClassLeft, detectedFrameClassRight, countIteration);
         auto stop = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
@@ -220,14 +225,14 @@ void templateMatching() // void*
     //detected frame
     //left
     std::vector<int> detectedFrameLeft;
-    detectedFrame.reserve(300);
+    detectedFrameLeft.reserve(300);
     std::vector<int> detectedFrameClassLeft;
-    detectedFrame.reserve(300);
+    detectedFrameLeft.reserve(300);
     //right
     std::vector<int> detectedFrameRight;
-    detectedFrame.reserve(300);
+    detectedFrameRight.reserve(300);
     std::vector<int> detectedFrameClassRight;
-    detectedFrame.reserve(300);
+    detectedFrameRight.reserve(300);
     //initialization
     while (!queueTrackerYolo_left.empty())
         queueTrackerYolo_left.pop();
@@ -263,9 +268,9 @@ void templateMatching() // void*
         countIteration++;
         std::cout << " -- " << countIteration << " -- " << std::endl;
         // get img from queue
-        std::array<cv::Mat1b, 2> imgs;
+        std::array<cv::Mat1b, 2> frames;
         int frameIndex;
-        bool boolImgs = utTM.getImagesFromQueueTM(imgs, frameIndex);
+        bool boolImgs = utTM.getImagesFromQueueTM(frames, frameIndex);
         //std::cout << "get imgs" << std::endl;
         if (!boolImgs)
         {
@@ -279,18 +284,18 @@ void templateMatching() // void*
             continue;
         }
         counterFinish = 0; // reset
-        cv::Mat1b frame_left = frames[0];
-        cv::Mat1b frame_right = frames[1];
+        cv::Mat1b frame_left = frames[LEFT_CAMERA];
+        cv::Mat1b frame_right = frames[RIGHT_CAMERA];
         std::vector<cv::Mat1b> templateImgsLeft;
         templateImgsLeft.reserve(100);
         bool boolLeft = false;
         /*start template matching process */
         auto start = std::chrono::high_resolution_clock::now();
-        std::thread thread_left(&TemplateMatching::templateMatching, tm, std::ref(frame_left), std::ref(frameIndex), std::ref(posSaverLeft), std::ref(classSaverLeft), std::ref(detectedFrameLeft), std::ref(detectedFrameClassLeft),
+        std::thread thread_left(&TemplateMatching::templateMatching, tm, std::ref(frame_left), std::ref(frameIndex), std::ref(posSaverTMLeft), std::ref(classSaverTMLeft), std::ref(detectedFrameLeft), std::ref(detectedFrameClassLeft),
             std::ref(queueTMClassIndexLeft), std::ref(queueTMBboxLeft), std::ref(queueTMTemplateLeft), std::ref(queueTrackerMOSSE_left), std::ref(queueTMScalesLeft),
             std::ref(queueYoloClassIndexLeft), std::ref(queueYoloBboxLeft), std::ref(queueYoloTemplateLeft), std::ref(queueTrackerYolo_left),std::ref(queueStartYolo_left),
             std::ref(queueTargetFrameIndex_left), std::ref(queueTargetClassIndexesLeft), std::ref(queueTargetBboxesLeft),std::ref(queueYolo_tracker2seq_left));
-        std::thread thread_right(&TemplateMatching::templateMatching, tm, std::ref(frame_right), std::ref(frameIndex), std::ref(posSaverRight), std::ref(classSaverRight), std::ref(detectedFrameRight), std::ref(detectedFrameClassRight),
+        std::thread thread_right(&TemplateMatching::templateMatching, tm, std::ref(frame_right), std::ref(frameIndex), std::ref(posSaverTMRight), std::ref(classSaverTMRight), std::ref(detectedFrameRight), std::ref(detectedFrameClassRight),
             std::ref(queueTMClassIndexRight), std::ref(queueTMBboxRight), std::ref(queueTMTemplateRight), std::ref(queueTrackerMOSSE_right), std::ref(queueTMScalesRight),
             std::ref(queueYoloClassIndexRight), std::ref(queueYoloBboxRight), std::ref(queueYoloTemplateRight), std::ref(queueTrackerYolo_right), std::ref(queueStartYolo_right),
             std::ref(queueTargetFrameIndex_right), std::ref(queueTargetClassIndexesRight), std::ref(queueTargetBboxesRight), std::ref(queueYolo_tracker2seq_right));
@@ -351,8 +356,8 @@ void sequence()
                 auto start = std::chrono::high_resolution_clock::now();
                 std::thread thread_left(&Sequence::updateData, seq, std::ref(seqData_left), std::ref(seqClasses_left), std::ref(queueTargetFrameIndex_left),
                     std::ref(queueTargetClassIndexesLeft), std::ref(queueTargetBboxesLeft), std::ref(queueUpdateLabels_left), std::ref(queueYolo_tracker2seq_left), std::ref(queueYolo_seq2tri_left));
-                std::thread thread_left(&Sequence::updateData, seq, std::ref(seqData_right), std::ref(seqClasses_right), std::ref(queueTargetFrameIndex_right),
-                    std::ref(queueTargetClassIndexesRight), std::ref(queueTargetBboxesRight), std::ref(queueUpdateLabels_right), std::ref(queueYolo_tracker2seq_right), std::ref(queueYolo_seq2tri_right))
+                std::thread thread_right(&Sequence::updateData, seq, std::ref(seqData_right), std::ref(seqClasses_right), std::ref(queueTargetFrameIndex_right),
+                    std::ref(queueTargetClassIndexesRight), std::ref(queueTargetBboxesRight), std::ref(queueUpdateLabels_right), std::ref(queueYolo_tracker2seq_right), std::ref(queueYolo_seq2tri_right));
                 thread_left.join();
                 thread_right.join();
                 auto stop = std::chrono::high_resolution_clock::now();
@@ -368,9 +373,9 @@ void sequence()
     }
     std::cout << "sequential data" << std::endl;
     std::cout << "LEFT" << std::endl;
-    utSeq.checkSeqData(seqData_left, seqClasses_left, file_seq_left);
+    utSeq.checkSeqData(seqData_left, seqClasses_left, file_seq_bbox_left, file_seq_class_left);
     std::cout << "RIGHT" << std::endl;
-    utSeq.checkSeqData(seqData_right, seqClasses_right, file_seq_right);
+    utSeq.checkSeqData(seqData_right, seqClasses_right, file_seq_bbox_right, file_seq_class_right);
 }
 
 /* main function */
@@ -396,13 +401,6 @@ int main()
         std::cerr << "Unable to open right file!" << std::endl;
         return 0;
     }
-    cv::VideoCapture capture(filename);
-    if (!capture.isOpened())
-    {
-        // error in opening the video input
-        std::cerr << "Unable to open file!" << std::endl;
-        return 0;
-    }
     int counter = 0;
 
     // multi thread code
@@ -410,9 +408,10 @@ int main()
     std::cout << "start Yolo thread" << std::endl;
     std::thread threadTemplateMatching(templateMatching);
     std::cout << "start template matching thread" << std::endl;
-    std::thread threadRemoveImg(&Utility::removeFrame, &utMain);
+    //std::thread threadRemoveImg(&Utility::removeFrame, ut);
     std::cout << "remove frame has started" << std::endl;
-    std::thread threadSeq(sequence);
+    //std::thread threadSeq(sequence);
+    //std::thread threadTri(&Triangulation::main, tri);
 
     while (true)
     {
@@ -429,13 +428,14 @@ int main()
         std::array<cv::Mat1b, 2> frames = { frameGray_left,frameGray_right };
         // cv::Mat1b frameGray;
         //  cv::cvtColor(frame, frameGray, cv::COLOR_BGR2GRAY);
-        ut.pushImg(frames, counter);
+        ut.pushFrame(frames, counter);
     }
 
     // std::thread threadTargetPredict(targetPredict);
     threadYolo.join();
     threadTemplateMatching.join();
-    threadRemoveImg.join();
-    threadSeq.join();
+    //threadRemoveImg.join();
+    //threadSeq.join();
+    //threadTri.join();
     return 0;
 }

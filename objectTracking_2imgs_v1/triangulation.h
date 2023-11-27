@@ -93,8 +93,9 @@ public:
                         std::cout << "update matching" << std::endl;
                         queueYolo_seq2tri_left.pop(); 
                         queueYolo_seq2tri_right.pop();
+                        if (!queueMatchingIndexes.empty()) queueMatchingIndexes.pop();
                         match.main(seqData_left, seqData_right, labels_left, labels_right, matchingIndexes); //matching objects in 2 images
-                        sortData(matchingIndexes);
+                        if (!matchingIndexes.empty()) sortData(matchingIndexes); //sort data in ascending way, 0,1,2,3,4,,,
                     }
                     //use previous matching indexes
                     else if (!queueMatchingIndexes.empty())
@@ -108,6 +109,7 @@ public:
                         std::cout << "start 3D positioning" << std::endl;
                         triangulation(seqData_left, seqData_right, matchingIndexes,data_3d);
                         queue_tri2predict.push(true);
+                        queueMatchingIndexes.push(matchingIndexes);
                         std::cout << "calculate 3d position" << std::endl;
                         auto stop = std::chrono::high_resolution_clock::now();
                         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
@@ -133,16 +135,17 @@ public:
         utTri.save3d(data_3d,file_3d);
     }
 
-    void sortData(std::vector<std::vector<int>>& data)
-    {
-        // Sorting in ascending way
-        std::sort(data.begin(), data.end(), compareVectors);
-    }
-
-    bool compareVectors(const std::vector<int>& a, const std::vector<int>& b) 
+    bool compareVectors(const std::vector<int>& a, const std::vector<int>& b)
     {
         // Compare based on the first element of each vector
         return a[0] < b[0];
+    }
+
+    void sortData(std::vector<std::vector<int>>& data)
+    {
+        std::sort(data.begin(), data.end(), [this](const std::vector<int>& a, const std::vector<int>& b) {
+            return compareVectors(a, b);
+            });
     }
 
     void triangulation(std::vector<std::vector<std::vector<int>>>& data_left, std::vector<std::vector<std::vector<int>>>& data_right, std::vector<std::vector<int>>& matchingIndexes,std::vector<std::vector<std::vector<int>>>& data_3d)

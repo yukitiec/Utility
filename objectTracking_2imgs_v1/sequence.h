@@ -112,7 +112,7 @@ public:
                 frameIndex = queueTargetFrameIndex_left.front();
                 classesLeft = queueTargetClassIndexesLeft.front();
                 bboxesLeft = queueTargetBboxesLeft.front();
-                queueTargetFrameIndex.pop();
+                queueTargetFrameIndex_left.pop();
                 queueTargetClassIndexesLeft.pop();
                 queueTargetBboxesLeft.pop();
                 ret = true;
