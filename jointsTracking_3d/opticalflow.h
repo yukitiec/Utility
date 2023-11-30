@@ -13,12 +13,17 @@ extern const float DIF_THRESHOLD;
 extern const float MIN_MOVE; //minimum opticalflow movement
 extern const int roiWidthOF;
 extern const int roiHeightOF;
+extern const int dense_vel_method;
 
 extern std::queue<std::array<cv::Mat1b, 2>> queueFrame;
 extern std::queue<int> queueFrameIndex;
 
 class OpticalFlow
 {
+private:
+    const cv::Size ROISize{ roiWidthOF, roiHeightOF };
+    const int originalWidth = 320;
+    const int originalHeight = 320;
 public:
     OpticalFlow()
     {
@@ -35,21 +40,23 @@ public:
         std::vector<std::vector<cv::Rect2i>> searchRoi;            //[number of human,6,cv::Rect2i], if tracker was failed, roi.x == -1
         std::vector<std::vector<std::vector<float>>> previousMove; //[number of human,6,movement in x and y] ROI movement of each joint
         getPreviousData(previousImg, searchRoi, previousMove, queueYoloOldImgSearch, queueYoloSearchRoi, queueOFOldImgSearch, queueOFSearchRoi, queuePreviousMove);
-        std::cout << "finish getting previous data " << std::endl;
+        //std::cout << "finish getting previous data " << std::endl;
         /* start optical flow process */
         /* for every human */
         std::vector<std::vector<cv::Mat1b>> updatedImgHuman;
         std::vector<std::vector<cv::Rect2i>> updatedSearchRoiHuman;
         std::vector<std::vector<std::vector<float>>> updatedMoveDists;
         std::vector<std::vector<std::vector<int>>> updatedPositionsHuman;
-        std::cout << "human =" << searchRoi.size() << " !!!!!!!!!!!!" << std::endl;
-        std::cout << "previousMove.size()=" << previousMove.size() << ", previousImg.size()=" << previousImg.size() << std::endl;
+        //std::cout << "human =" << searchRoi.size() << " !!!!!!!!!!!!" << std::endl;
+        //for (cv::Rect2i& roi : searchRoi[0])
+        //    std::cout << roi.x << "," << roi.y << "," << roi.width << "," << roi.height << std::endl;
+        //std::cout << "previousMove.size()=" << previousMove.size() << ", previousImg.size()=" << previousImg.size() << std::endl;
         if (!searchRoi.empty())
         {
             for (int i = 0; i < searchRoi.size(); i++)
             {
-                std::cout << i << "-th human::" << "previousMove.size()=" << previousMove[i].size() << std::endl;
-                std::cout<<"previousImg.size()=" << previousImg[i].size() << std::endl;
+                //std::cout << i << "-th human::" << "previousMove.size()=" << previousMove[i].size() << std::endl;
+                //std::cout<<"previousImg.size()=" << previousImg[i].size() << std::endl;
                 /* for every joints */
                 std::vector<cv::Mat1b> updatedImgJoints;
                 std::vector<cv::Rect2i> updatedSearchRoi;
@@ -187,7 +194,7 @@ public:
                     std::cout << "no thread has started" << std::endl;
                     //std::this_thread::sleep_for(std::chrono::milliseconds(30));
                 }
-                std::cout << i << "-th human" << std::endl;
+                //std::cout << i << "-th human" << std::endl;
                 /* combine all data and push data to queue */
                 /* search roi */
                 updatedSearchRoi.push_back(updatedSearchRoiLeftShoulder);
@@ -203,7 +210,7 @@ public:
                 updatedPositions.push_back(updatedPosLeftWrist);
                 updatedPositions.push_back(updatedPosRightWrist);
                 /* updated img */
-                /* left shoulder*/
+                /* left shoulder */
                 if (updatedSearchRoi[0].x >= 0)
                 {
                     updatedImgJoints.push_back(updatedImgLeftShoulder);
@@ -255,7 +262,7 @@ public:
                 queueOFOldImgSearch.push(updatedImgHuman);
                 queuePreviousMove.push(updatedMoveDists);
             }
-            std::cout << "save to posSaver! posSaver size=" << posSaver.size() << std::endl;
+            //std::cout << "save to posSaver! posSaver size=" << posSaver.size() << std::endl;
 
             /* arrange posSaver */
             if (!posSaver.empty())
@@ -344,33 +351,33 @@ public:
             getYoloData(previousYoloImg, searchYoloRoi, queueYoloOldImgSearch, queueYoloSearchRoi);
             /* update data here */
             /* iterate for all human detection */
-            std::cout << "searchYoloRoi size : " << searchYoloRoi.size() << std::endl;
+            //std::cout << "searchYoloRoi size : " << searchYoloRoi.size() << std::endl;
             // std::cout << "searchRoi by optical flow size : " << searchRoi.size() << ","<<searchRoi[0].size()<<std::endl;
             // std::cout << "successful trackers of optical flow : " << previousImg.size() << std::endl;
             for (int i = 0; i < searchYoloRoi.size(); i++)
             {
-                std::cout << i << "-th human" << std::endl;
+                //std::cout << i << "-th human" << std::endl;
                 /* some OF tracking were successful */
                 if (!previousImg.empty())
                 {
                     /* existed human detection */
                     if (i < previousImg.size())
                     {
-                        std::cout << "previousImg : num of human : " << previousImg.size() << std::endl;
+                        //std::cout << "previousImg : num of human : " << previousImg.size() << std::endl;
                         /* for all joints */
                         int counterJoint = 0;
                         int counterYoloImg = 0;
                         int counterTrackerOF = 0; // number of successful trackers by Optical Flow
                         for (const cv::Rect2i& roi : searchRoi[i])
                         {
-                            std::cout << "update data with Yolo detection : " << counterJoint << "-th joint" << std::endl;
+                            //std::cout << "update data with Yolo detection : " << counterJoint << "-th joint" << std::endl;
                             /* tracking is failed -> update data with yolo data */
                             if (roi.x < 0)
                             {
                                 /* yolo detect joints -> update data */
                                 if (searchYoloRoi[i][counterJoint].x >= 0)
                                 {
-                                    std::cout << "update OF tracker features with yolo detection" << std::endl;
+                                    //std::cout << "update OF tracker features with yolo detection" << std::endl;
                                     searchRoi[i].insert(searchRoi[i].begin() + counterJoint, searchYoloRoi[i][counterJoint]);
                                     previousImg[i].insert(previousImg[i].begin() + counterTrackerOF, previousYoloImg[i][counterYoloImg]);
                                     moveDists[i].insert(moveDists[i].begin() + counterTrackerOF, { 0.0,0.0 });
@@ -381,20 +388,20 @@ public:
                                 /* yolo can't detect joint -> not updated data */
                                 else
                                 {
-                                    std::cout << "Yolo didn't detect joint" << std::endl;
+                                    //std::cout << "Yolo didn't detect joint" << std::endl;
                                     counterJoint++;
                                 }
                             }
                             /* tracking is successful */
                             else
                             {
-                                std::cout << "tracking was successful" << std::endl;
+                                //std::cout << "tracking was successful" << std::endl;
                                 /* update template image with Yolo's one */
                                 if (boolChange)
                                 {
                                     if (searchYoloRoi[i][counterJoint].x >= 0)
                                     {
-                                        std::cout << "update OF tracker with yolo detection" << std::endl;
+                                        //std::cout << "update OF tracker with yolo detection" << std::endl;
                                         previousImg[i].at(counterTrackerOF) = previousYoloImg[i][counterYoloImg];
                                         moveDists[i].at(counterTrackerOF) = std::vector<float>{ 0.0,0.0 };
                                         if (static_cast<float>(roi.x - searchYoloRoi[i][counterJoint].x) > DIF_THRESHOLD || static_cast<float>(searchRoi[i][counterJoint].y - searchYoloRoi[i][counterJoint].y) > DIF_THRESHOLD ||
@@ -413,14 +420,14 @@ public:
                                 }
                                 counterJoint++;
                                 counterTrackerOF++;
-                                std::cout << "update iterator" << std::endl;
+                                //std::cout << "update iterator" << std::endl;
                             }
                         }
                     }
                     /* new human detecte3d */
                     else
                     {
-                        std::cout << "new human was detected by Yolo " << std::endl;
+                        //std::cout << "new human was detected by Yolo " << std::endl;
                         int counterJoint = 0;
                         int counterYoloImg = 0;
                         std::vector<cv::Rect2i> joints;
@@ -457,7 +464,7 @@ public:
                 else
                 {
                     searchRoi = std::vector<std::vector<cv::Rect2i>>(); // initialize searchRoi for avoiding data
-                    std::cout << "Optical Flow :: failed or first Yolo detection " << std::endl;
+                    //std::cout << "Optical Flow :: failed or first Yolo detection " << std::endl;
                     int counterJoint = 0;
                     int counterYoloImg = 0;
                     std::vector<cv::Rect2i> joints;
@@ -513,9 +520,11 @@ public:
         std::vector<float> err;
         cv::TermCriteria criteria = cv::TermCriteria((cv::TermCriteria::COUNT)+(cv::TermCriteria::EPS), 10, 0.03);
         cv::Mat1b croppedImg = frame(searchRoi);
+        if (croppedImg.rows!=roiHeightOF || croppedImg.cols!=roiWidthOF) cv::resize(croppedImg, croppedImg, ROISize);
+        if (previousImg.rows != roiHeightOF || previousImg.cols != roiWidthOF) cv::resize(previousImg, previousImg, ROISize);
         // Calculate Optical Flow
         cv::Mat flow(previousImg.size(), CV_32FC2);                                           // prepare matrix for saving dense optical flow
-        cv::calcOpticalFlowFarneback(previousImg, croppedImg, flow, 0.5, 2, 4, 4, 3, 1.6, 0); // calculate dense optical flow
+        cv::calcOpticalFlowFarneback(previousImg, croppedImg, flow, 0.5, 2, 5, 3, 2, 1.6, 0); // calculate dense optical flow default :: 0.5, 2, 4, 4, 3, 1.6, 0
         /*
          *void cv::calcOpticalFlowFarneback(
          *InputArray prev,         // Input previous frame (grayscale image)
@@ -538,6 +547,9 @@ public:
         int numBackGround = 0;
         int rows = static_cast<int>(flow.rows / (skipPixel + 1)); // number of rows adapted pixels
         int cols = static_cast<int>(flow.cols / (skipPixel + 1)); // number of cols adapted pixels
+        std::vector<float> velocities;
+        std::vector<std::vector<float>> candidates_vel;
+        float max = MIN_MOVE;
         for (int y = 1; y <= rows; ++y)
         {
             for (int x = 1; x <= cols; ++x)
@@ -551,15 +563,75 @@ public:
                 }
                 else
                 {
-                    vecX += flowVec.x;
-                    vecY += flowVec.y;
-                    numPixels += 1;
+                    //adapt average value
+                    if (dense_vel_method == 0)
+                    {
+                        vecX += flowVec.x;
+                        vecY += flowVec.y;
+                        numPixels += 1;
+                    }
+                    //adapt max value
+                    else if(dense_vel_method == 1)
+                    {
+                        if (std::pow(flowVec.x, 2) + std::pow(flowVec.y, 2) > max)
+                        {
+                            vecX = flowVec.x;
+                            vecY = flowVec.y;
+                            max = std::pow(flowVec.x, 2) + std::pow(flowVec.y, 2);
+                        }
+                    }
+                    //adapt first, second, or third quarter value
+                    else if (dense_vel_method == 2 || dense_vel_method == 3 || dense_vel_method == 4)
+                    {
+                        velocities.push_back(std::pow(flowVec.x, 2) + std::pow(flowVec.y, 2));
+                        candidates_vel.push_back({ flowVec.x,flowVec.y });
+                    }
+                    
                 }
             }
         }
         //std::cout << "background = " << numBackGround << ", adapted optical flow = " << numPixels << std::endl;
-        vecX /= numPixels;
-        vecY /= numPixels;
+        //average method
+        if (dense_vel_method == 0)
+        {
+            vecX /= numPixels;
+            vecY /= numPixels;
+        }
+        if (!velocities.empty())
+        {
+            //median value
+            if (dense_vel_method == 2 || ((dense_vel_method == 3 || dense_vel_method == 4) && velocities.size() <=3))
+            {
+                float median = calculateMedian(velocities);
+                // Iterate over the vector and find indices with the specified value
+                auto it = std::find(velocities.begin(), velocities.end(), median);
+                size_t index = std::distance(velocities.begin(), it);
+                vecX = candidates_vel[index][0];
+                vecY = candidates_vel[index][1];
+            }
+            //third quarter value
+            else if (dense_vel_method == 3 && velocities.size() >= 4)
+            {
+                float thirdQuarter = calculateThirdQuarter(velocities);
+                // Iterate over the vector and find indices with the specified value
+                auto it = std::find(velocities.begin(), velocities.end(), thirdQuarter);
+                size_t index = std::distance(velocities.begin(), it);
+                vecX = candidates_vel[index][0];
+                vecY = candidates_vel[index][1];
+            }
+            //first quarter value
+            else if (dense_vel_method == 4 && velocities.size()>=4)
+            {
+                float firstQuarter = calculateFirstQuarter(velocities);
+                // Iterate over the vector and find indices with the specified value
+                auto it = std::find(velocities.begin(), velocities.end(), firstQuarter);
+                size_t index = std::distance(velocities.begin(), it);
+                vecX = candidates_vel[index][0];
+                vecY = candidates_vel[index][1];
+            }
+        }
+        
+        std::cout << "vecX=" << vecX << ", vecY=" << vecY << std::endl;
         if (std::pow(vecX, 2) + std::pow(vecY, 2) >= MoveThreshold)
         {
             int updatedLeft = searchRoi.x + static_cast<int>(vecX);
@@ -569,12 +641,25 @@ public:
             int right = std::max(std::min(left + roiWidthOF, frame.cols), 0);
             int bottom = std::max(std::min(top + roiHeightOF, frame.rows), 0);
             cv::Rect2i roi(left,top,right-left,bottom-top);
-            //std::cout << "roi.x=" << roi.x << ", roi.y=" << roi.y << ", roi.width=" << roi.width << ", roi.height=" << roi.height << std::endl;
-            updatedSearchRoi = roi;
-            updatedMove = std::vector<float>{ vecX, vecY };
-            // Update the previous frame and previous points
-            updatedImg = croppedImg.clone();
-            updatedPos = std::vector<int>{ frameIndex, static_cast<int>((left+right)/2), static_cast<int>((top+bottom)/2)};
+            //tracking was successful
+            if (roi.width > roiWidthOF / 2 && roi.height > roiHeightOF / 2)
+            {
+                std::cout << "roi.x=" << roi.x << ", roi.y=" << roi.y << ", roi.width=" << roi.width << ", roi.height=" << roi.height << std::endl;
+                updatedSearchRoi = roi;
+                updatedMove = std::vector<float>{ vecX, vecY };
+                // Update the previous frame and previous points
+                updatedImg = croppedImg.clone();
+                updatedPos = std::vector<int>{ frameIndex, static_cast<int>((left + right) / 2), static_cast<int>((top + bottom) / 2) };
+            }
+            //out of range
+            else
+            {
+                updatedSearchRoi.x = -1;
+                updatedSearchRoi.y = -1;
+                updatedSearchRoi.width = -1;
+                updatedSearchRoi.height = -1;
+                updatedPos = std::vector<int>{ frameIndex, -1, -1 };
+            }
         }
         /* not move -> tracking was failed */
         else
@@ -585,6 +670,54 @@ public:
             updatedSearchRoi.height = -1;
             updatedPos = std::vector<int>{ frameIndex, -1, -1 };
         }
+    }
+
+    float calculateMedian(std::vector<float> vec) {
+        // Check if the vector is not empty
+        if (vec.empty()) {
+            throw std::invalid_argument("Vector is empty");
+        }
+
+        // Calculate the middle index
+        size_t size = vec.size();
+        size_t middleIndex = size / 2;
+
+        // Use std::nth_element to find the median
+        std::nth_element(vec.begin(), vec.begin() + middleIndex, vec.end());
+
+        return vec[middleIndex];
+    }
+
+    float calculateThirdQuarter(std::vector<float> vec) {
+        // Check if the vector is not empty
+        if (vec.empty()) {
+            throw std::invalid_argument("Vector is empty");
+        }
+
+        // Calculate the middle index
+        size_t size = vec.size();
+        size_t middleIndex = static_cast<size_t>(size *(3/ 4));
+
+        // Use std::nth_element to find the median
+        std::nth_element(vec.begin(), vec.begin() + middleIndex, vec.end());
+
+        return vec[middleIndex];
+    }
+
+    float calculateFirstQuarter(std::vector<float> vec) {
+        // Check if the vector is not empty
+        if (vec.empty()) {
+            throw std::invalid_argument("Vector is empty");
+        }
+
+        // Calculate the middle index
+        size_t size = vec.size();
+        size_t middleIndex = static_cast<size_t>(size * (1 / 4));
+
+        // Use std::nth_element to find the median
+        std::nth_element(vec.begin(), vec.begin() + middleIndex, vec.end());
+
+        return vec[middleIndex];
     }
 };
 

@@ -104,31 +104,22 @@ void yolo()
             else
             {
                 counterFinish = 0;
-                std::array<cv::Mat1b,2> frames;
+                std::array<cv::Mat1b, 2> frames;
                 int frameIndex;
                 auto start = std::chrono::high_resolution_clock::now();
                 utyolo.getImages(frames, frameIndex);
                 //if (boolBatch)
                 //{
                 cv::Mat1b concatFrame;
-                cv::hconcat(frames[LEFT], frames[RIGHT], concatFrame);//concatenate 2 imgs horizontally
-                yolo.detect(concatFrame, frameIndex, counter, posSaver_left, posSaver_right,queueYoloOldImgSearch_left, queueYoloSearchRoi_left, queueYoloOldImgSearch_right, queueYoloSearchRoi_right);
-                //}
-                /*
-                else
+                //std::cout << "frames[LEFT]:" << frames[LEFT].rows << "," << frames[LEFT].cols << ", frames[RIGHT]:" << frames[RIGHT].rows << "," << frames[RIGHT].cols << std::endl;
+                if (frames[LEFT].rows > 0 && frames[RIGHT].rows > 0)
                 {
-                    cv::Mat1b frame_left = frames[0];
-                    cv::Mat1b frame_right = frames[1];
-                    std::thread thread_yoloLeft(&YOLOPose::detect, &yolo_left, std::ref(frame_left), std::ref(frameIndex), std::ref(counter), std::ref(posSaver_left), std::ref(queueYoloOldImgSearch_left), std::ref(queueYoloSearchRoi_left));
-                    std::thread thread_yoloRight(&YOLOPose::detect, &yolo_right, std::ref(frame_right), std::ref(frameIndex), std::ref(counter), std::ref(posSaver_right), std::ref(queueYoloOldImgSearch_right), std::ref(queueYoloSearchRoi_right));
-                    std::cout << "both threads has started" << std::endl;
-                    thread_yoloLeft.join();
-                    thread_yoloRight.join();
+                    cv::hconcat(frames[LEFT], frames[RIGHT], concatFrame);//concatenate 2 imgs horizontally
+                    yolo.detect(concatFrame, frameIndex, counter, posSaver_left, posSaver_right, queueYoloOldImgSearch_left, queueYoloSearchRoi_left, queueYoloOldImgSearch_right, queueYoloSearchRoi_right);
+                    auto stop = std::chrono::high_resolution_clock::now();
+                    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+                    std::cout << "Time taken by YOLO detection : " << duration.count() << " milliseconds" << std::endl;
                 }
-                */
-                auto stop = std::chrono::high_resolution_clock::now();
-                auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
-                std::cout << "Time taken by YOLO detection : " << duration.count() << " milliseconds" << std::endl;
             }
         }
     }

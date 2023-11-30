@@ -11,6 +11,9 @@
 extern std::queue<std::vector<std::vector<std::vector<int>>>> queueTriangulation_left;
 extern std::queue<std::vector<std::vector<std::vector<int>>>> queueTriangulation_right;
 
+/* from joints to robot control */
+extern std::queue<std::vector<std::vector<std::vector<int>>>> queueJointsPositions;
+
 /* 3D triangulation */
 extern const int BASELINE; // distance between 2 cameras
 // std::vector<std::vector<float>> cameraMatrix{ {179,0,160},{0,179,160},{0,0,1} }; //camera matrix from camera calibration
@@ -18,18 +21,21 @@ extern const int BASELINE; // distance between 2 cameras
 /* revise here based on camera calibration */
 extern const cv::Mat cameraMatrix;
 extern const cv::Mat distCoeffs;
+/* transformation matrix from camera coordinate to robot base coordinate */
+extern const std::vector<std::vector<float>> transform_cam2base;
 /* save file*/
 extern const std::string file_3d;
 
 class Triangulation
 {
 private:
-    const float fX = cameraMatrix.at<double>(0, 0);
-    const float fY = cameraMatrix.at<double>(1, 1);
-    const float fSkew = cameraMatrix.at<double>(0, 1);
-    const float oX = cameraMatrix.at<double>(0, 2);
-    const float oY = cameraMatrix.at<double>(1, 2);
+    const float fX = cameraMatrix.at<float>(0, 0);
+    const float fY = cameraMatrix.at<float>(1, 1);
+    const float fSkew = cameraMatrix.at<float>(0, 1);
+    const float oX = cameraMatrix.at<float>(0, 2);
+    const float oY = cameraMatrix.at<float>(1, 2);
     const int numJoint = 6; //number of joints
+    const float epsiron = 0.001;
 public:
     Triangulation()
     {
@@ -50,6 +56,7 @@ public:
         std::vector<std::vector<std::vector<std::vector<int>>>> posSaver_3d; //{num of sequence, num of human, joints, {frameIndex, X,Y,Z}}
         int counterIteration = 0;
         int counterFinish = 0;
+        int counterNextIteration = 0;
         while (true) // continue until finish
         {
             counterIteration++;
@@ -66,6 +73,7 @@ public:
                 /* new detection data available */
                 if (!queueTriangulation_left.empty() && !queueTriangulation_right.empty())
                 {
+                    counterNextIteration = 0;
                     auto start = std::chrono::high_resolution_clock::now();
                     std::vector<std::vector<std::vector<int>>> data_left, data_right;
                     std::cout << "start 3d positioning" << std::endl;
@@ -76,6 +84,7 @@ public:
                     std::cout << "calculate 3d position" << std::endl;
                     /* arrange posSaver -> sequence data */
                     arrangeData(data_3d, posSaver_3d);
+                    queueJointsPositions.push(posSaver_3d.back());
                     std::cout << "arrange data" << std::endl;
                     auto stop = std::chrono::high_resolution_clock::now();
                     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
@@ -85,8 +94,22 @@ public:
                 else
                 {
                     //std::cout << "both data can't be availble :: left " << !queueTriangulation_left.empty() << ", right=" << queueTriangulation_right.empty() << std::endl;
-                    if (!queueTriangulation_left.empty()) queueTriangulation_left.pop();
-                    if (!queueTriangulation_right.empty()) queueTriangulation_right.pop();
+                    if (!queueTriangulation_left.empty() || !queueTriangulation_right.empty())
+                    {
+                        if (counterNextIteration == 10)
+                        {
+                            if (!queueTriangulation_left.empty()) queueTriangulation_left.pop();
+                            if (!queueTriangulation_right.empty()) queueTriangulation_right.pop();
+                        }
+                        else
+                        {
+                            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                            counterNextIteration++;
+                        }
+                        
+                    }
+                    
+                    
                 }
             }
         }
@@ -132,10 +155,15 @@ public:
             if (left[0] == right[0])
             {
                 int xl = left[1]; int xr = right[1]; int yl = left[2]; int yr = right[2];
-                int disparity = (int)(xl - xr);
+                float disparity = xl - xr + epsiron;
+                if (disparity < 0.1) disparity += epsiron;
                 int X = (int)(BASELINE / disparity) * (xl - oX - (fSkew / fY) * (yl - oY));
                 int Y = (int)(BASELINE * (fX / fY) * (yl - oY) / disparity);
                 int Z = (int)(fX * BASELINE / disparity);
+                /* convert Camera coordinate to robot base coordinate */
+                X = static_cast<int>(transform_cam2base[0][0] * X + transform_cam2base[0][1] * Y + transform_cam2base[0][2] * Z + transform_cam2base[0][3]);
+                Y = static_cast<int>(transform_cam2base[1][0] * X + transform_cam2base[1][1] * Y + transform_cam2base[1][2] * Z + transform_cam2base[1][3]);
+                Z = static_cast<int>(transform_cam2base[2][0] * X + transform_cam2base[2][1] * Y + transform_cam2base[2][2] * Z + transform_cam2base[2][3]);
                 result = std::vector<int>{ left[0],X,Y,Z };
             }
             else

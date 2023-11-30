@@ -24,13 +24,14 @@ private:
 
     std::string yolofilePath = "yolov8m-pose_320_640.torchscript";
     const int originalWidth = 320;
+    const int originalHeight = 320;
     int frameWidth = 640;
     int frameHeight = 320;
     const int yoloWidth = 640;
     const int yoloHeight = 320;
     const cv::Size YOLOSize{ yoloWidth, yoloHeight };
-    const float IoUThreshold = 0.00001;
-    const float ConfThreshold = 0.9;
+    const float IoUThreshold = 0.1;
+    const float ConfThreshold = 0.4;
     const float IoUThresholdIdentity = 0.25; // for maitainig consistency of tracking
     /* initialize function */
     void initializeDevice()
@@ -111,6 +112,7 @@ public:
         std::vector<torch::Tensor> detectedBoxesHuman; //(n,56)
         /*detect human */
         nonMaxSuppressionHuman(preds, detectedBoxesHuman, ConfThreshold, IoUThreshold);
+        std::cout << "detectedBboxesHuman size=" << detectedBoxesHuman.size() << std::endl;
         /* get keypoints from detectedBboxesHuman -> shoulder,elbow,wrist */
         std::vector<std::vector<std::vector<int>>> keyPoints; // vector for storing keypoints
         std::vector<int> humanPos; //whether human is in left or right
@@ -134,7 +136,8 @@ public:
         //cv::imwrite("input.jpg", frame);
         cv::cvtColor(frame, yoloimg, cv::COLOR_GRAY2RGB);
         cv::resize(yoloimg, yoloimg, YOLOSize);
-        std::cout << "yoloImg.height" << yoloimg.rows << ", yoloimg.width" << yoloimg.cols << std::endl;
+        //cv::imwrite("yoloimg.jpg", yoloimg);
+        //std::cout << "yoloImg.height" << yoloimg.rows << ", yoloimg.width" << yoloimg.cols << std::endl;
         imgTensor = torch::from_blob(yoloimg.data, { yoloimg.rows, yoloimg.cols, 3 }, torch::kByte); // vector to tensor
         imgTensor = imgTensor.permute({ 2, 0, 1 });                                                  // Convert shape from (H,W,C) -> (C,H,W)
         imgTensor = imgTensor.toType(torch::kFloat);                                               // convert to float type
@@ -156,6 +159,8 @@ public:
         torch::Tensor x = prediction.index_select(1, torch::nonzero(xc[0]).select(1, 0)); // box, x0.shape : (1,n,6) : n: number of candidates
         x = x.index_select(1, x.select(2, 4).argsort(1, true).squeeze());                 // ball : sorted in descending order
         x = x.squeeze();                                                                  //(1,n,56) -> (n,56)
+        bool boolLeft = false;
+        bool boolRight = false;
         if (x.size(0) != 0)
         {
             /* 1 dimension */
@@ -168,14 +173,25 @@ public:
             else
             {
                 // std::cout << "top defined" << std::endl;
-                detectedBoxesHuman.push_back(x[0].cpu());
+                if (x[0][0].item<int>()<= originalWidth)
+                {
+                    //std::cout << "first Human is left" << std::endl;
+                    detectedBoxesHuman.push_back(x[0].cpu());
+                    boolLeft = true;
+                }
+                else if (x[0][0].item<int>() > originalWidth)
+                {
+                    //std::cout << "first human is right" << std::endl;
+                    detectedBoxesHuman.push_back(x[0].cpu());
+                    boolRight = true;
+                }
                 // std::cout << "push back top data" << std::endl;
                 // for every candidates
                 /* if adapt many humans, validate here */
                 if (x.size(0) >= 2)
                 {
                     //std::cout << "nms start" << std::endl;
-                    nms(x, detectedBoxesHuman, iouThreshold); // exclude overlapped bbox : 20 milliseconds
+                    nms(x, detectedBoxesHuman, iouThreshold,boolLeft,boolRight); // exclude overlapped bbox : 20 milliseconds
                     //std::cout << "num finished" << std::endl;
                 }
             }
@@ -192,7 +208,7 @@ public:
         return y;
     }
 
-    void nms(torch::Tensor& x, std::vector<torch::Tensor>& detectedBoxes, float& iouThreshold)
+    void nms(torch::Tensor& x, std::vector<torch::Tensor>& detectedBoxes, float& iouThreshold,bool& boolLeft, bool& boolRight)
     {
         /* calculate IoU for excluding overlapped bboxes
          *
@@ -205,24 +221,31 @@ public:
         // there are some overlap between two bbox
         for (int i = 1; i < numBoxes; i++)
         {
-            box = xywh2xyxy(x[i].slice(0, 0, 4)); //(xCenter,yCenter,width,height) -> (left,top,right,bottom)
-
-            bool addBox = true; // if save bbox as a new detection
-
-            for (const torch::Tensor& savedBox : detectedBoxes)
+            if (boolLeft && boolRight) break;
+            //detect only 1 human in each image
+            if ((x[i][0].item<int>() <= originalWidth && !boolLeft) || (x[i][0].item<int>() > originalWidth && !boolRight))
             {
-                float iou = calculateIoU(box, savedBox); // calculate IoU
-                /* same bbox : already found -> not add */
-                if (iou > iouThreshold)
+                box = xywh2xyxy(x[i].slice(0, 0, 4)); //(xCenter,yCenter,width,height) -> (left,top,right,bottom)
+
+                bool addBox = true; // if save bbox as a new detection
+
+                for (const torch::Tensor& savedBox : detectedBoxes)
                 {
-                    addBox = false;
-                    break; // next iteration
+                    float iou = calculateIoU(box, savedBox); // calculate IoU
+                    /* same bbox : already found -> not add */
+                    if (iou > iouThreshold)
+                    {
+                        addBox = false;
+                        break; // next iteration
+                    }
                 }
-            }
-            /* new tracker */
-            if (addBox)
-            {
-                detectedBoxes.push_back(x[i].cpu());
+                /* new tracker */
+                if (addBox)
+                {
+                    detectedBoxes.push_back(x[i].cpu());
+                    if (x[i][0].item<int>() <= originalWidth && !boolLeft) boolLeft = true;
+                    if (x[i][0].item<int>() > originalWidth && !boolRight) boolRight = true;
+                }
             }
         }
     }
@@ -261,12 +284,18 @@ public:
                 /* if keypoints score meet criteria */
                 if (detectedBboxesHuman[i][3 * j + 7].item<float>() > ConfThreshold)
                 {
-                    keyPointsTemp.push_back({ static_cast<int>((frameWidth / yoloWidth) * detectedBboxesHuman[i][3 * j + 7 - 2].item<int>()), static_cast<int>((frameHeight / yoloHeight) * detectedBboxesHuman[i][3 * j + 7 - 1].item<int>()) }); /*(xCenter,yCenter)*/
-                    //std::cout << "xCenter="<<static_cast<int>(frameWidth / yoloWidth) * detectedBboxesHuman[i][3 * j + 7 - 2].item<int>() << std::endl;
-                    //std::cout << (static_cast<int>((frameWidth / yoloWidth) * detectedBboxesHuman[i][3 * j + 7 - 2].item<int>()) <= originalWidth) << std::endl;
+                    //left
                     if ((static_cast<int>((frameWidth / yoloWidth) * detectedBboxesHuman[i][3 * j + 7 - 2].item<int>()) <= originalWidth))
+                    {
                         boolLeft = true; //left person
-                    else boolLeft = false;
+                        keyPointsTemp.push_back({ static_cast<int>((frameWidth / yoloWidth) * detectedBboxesHuman[i][3 * j + 7 - 2].item<int>()), static_cast<int>((frameHeight / yoloHeight) * detectedBboxesHuman[i][3 * j + 7 - 1].item<int>()) }); /*(xCenter,yCenter)*/
+                    }
+                    //right
+                    else
+                    {
+                        boolLeft = false;
+                        keyPointsTemp.push_back({ static_cast<int>((frameWidth / yoloWidth) * detectedBboxesHuman[i][3 * j + 7 - 2].item<int>() - originalWidth), static_cast<int>((frameHeight / yoloHeight) * detectedBboxesHuman[i][3 * j + 7 - 1].item<int>()) }); /*(xCenter,yCenter)*/
+                    }
                 }
                 else
                 {
@@ -365,12 +394,12 @@ public:
 
     void organize_left(cv::Mat1b& frame, int& frameIndex,std::vector<int>& pos, std::vector<cv::Rect2i>& joints, std::vector<cv::Mat1b>& imgJoint, std::vector<std::vector<int>>& jointsCenter)
     {
-        if (static_cast<int>(pos[0]) != -1)
+        if (static_cast<int>(pos[0]) >= 0)
         {
-            int left = std::max(static_cast<int>(pos[0] - roiWidthYolo / 2), 0);
-            int top = std::max(static_cast<int>(pos[1] - roiHeightYolo / 2), 0);
-            int right = std::min(static_cast<int>(pos[0] + roiWidthYolo / 2), frame.cols);
-            int bottom = std::min(static_cast<int>(pos[1] + roiHeightYolo / 2), frame.rows);
+            int left = std::min(std::max(static_cast<int>(pos[0] - roiWidthYolo / 2), 0), originalWidth);
+            int top = std::min(std::max(static_cast<int>(pos[1] - roiHeightYolo / 2), 0),originalHeight);
+            int right = std::max(std::min(static_cast<int>(pos[0] + roiWidthYolo / 2), originalWidth),0);
+            int bottom = std::max(std::min(static_cast<int>(pos[1] + roiHeightYolo / 2), originalHeight),0);
             cv::Rect2i roi(left, top, right - left, bottom - top);
             jointsCenter.push_back({ frameIndex, pos[0], pos[1] });
             joints.push_back(roi);
@@ -386,17 +415,17 @@ public:
 
     void organize_right(cv::Mat1b& frame, int& frameIndex, std::vector<int>& pos, std::vector<cv::Rect2i>& joints, std::vector<cv::Mat1b>& imgJoint, std::vector<std::vector<int>>& jointsCenter)
     {
-        if (static_cast<int>(pos[0]) != -1)
+        if (static_cast<int>(pos[0]) >= 0)
         {
-            int left = std::max(static_cast<int>(pos[0] - roiWidthYolo / 2 ), 0); //subtract left img width
-            int top = std::max(static_cast<int>(pos[1] - roiHeightYolo / 2), 0);
-            int right = std::min(static_cast<int>(pos[0] + roiWidthYolo / 2), frame.cols);
-            int bottom = std::min(static_cast<int>(pos[1] + roiHeightYolo / 2), frame.rows);
+            int left = std::min(std::max(static_cast<int>(pos[0] - roiWidthYolo / 2), 0), originalWidth);
+            int top = std::min(std::max(static_cast<int>(pos[1] - roiHeightYolo / 2), 0), originalHeight);
+            int right = std::max(std::min(static_cast<int>(pos[0] + roiWidthYolo / 2), originalWidth), 0);
+            int bottom = std::max(std::min(static_cast<int>(pos[1] + roiHeightYolo / 2), originalHeight), 0);
             cv::Rect2i roi(left, top, right - left, bottom - top);
-            imgJoint.push_back(frame(roi));
-            roi.x -= originalWidth;
-            jointsCenter.push_back({ frameIndex, pos[0], pos[1] });
             joints.push_back(roi);
+            roi.x += originalWidth;
+            imgJoint.push_back(frame(roi));
+            jointsCenter.push_back({ frameIndex, pos[0], pos[1] });
         }
         /* keypoints can't be detected */
         else
