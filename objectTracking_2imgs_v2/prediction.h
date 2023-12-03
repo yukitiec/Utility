@@ -84,7 +84,10 @@ public:
 
     void predictTargets(int& index, std::vector<std::vector<int>>& data, std::vector<std::vector<std::vector<int>>>& targets3D)
     {
-        
+        /**
+        * data :: {num of time-steps, {frameIndex,X,Y,Z}}
+        *
+        */
         /* trajectoryPrediction */
         std::vector<float> coefX, coefY, coefZ;
         linearRegression(data, coefX);
