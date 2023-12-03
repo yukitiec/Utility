@@ -182,7 +182,6 @@ public:
         if (!data_3d[index].empty())
         {
             int last_frameIndex = (data_3d[index].back())[0]; //get last frame index
-            //calculate 3d position for all left data
             std::vector<std::vector<int>> temp_3d;
             while (it_left < num_frames_left && it_right < num_frames_right)
             {
@@ -190,19 +189,12 @@ public:
                 {
                     std::vector<int> result;
                     cal3D(left[it_left], right[it_right], result);
-                    if (result[0] != -1) temp_3d.push_back(result); //add 3D data
+                    if (result[0] != -1) data_3d.at(index).push_back(result);
                     it_left++;
                     it_right++;
                 }
                 else if (left[it_left][0] > right[it_right][0]) it_right++;
                 else if (left[it_left][0] < right[it_right][0]) it_left++;
-            }
-            if (!temp_3d.empty())
-            {
-                for (std::vector<int>& newData : temp_3d)
-                {
-                    data_3d.at(index).push_back(newData);
-                }
             }
         }
         //no previous data
