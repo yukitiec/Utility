@@ -157,8 +157,8 @@ public:
                 int xl = left[1]; int xr = right[1]; int yl = left[2]; int yr = right[2];
                 float disparity = xl - xr + epsiron;
                 if (disparity < 0.1) disparity += epsiron;
-                int X = (int)(BASELINE / disparity) * (xl - oX - (fSkew / fY) * (yl - oY));
-                int Y = (int)(BASELINE * (fX / fY) * (yl - oY) / disparity);
+                int X = (int)(BASELINE / disparity) * (xl - oX - (fSkew / fY) * ((yl+yr)/2 - oY));
+                int Y = (int)(BASELINE * (fX / fY) * ((yl + yr) / 2 - oY) / disparity);
                 int Z = (int)(fX * BASELINE / disparity);
                 /* convert Camera coordinate to robot base coordinate */
                 X = static_cast<int>(transform_cam2base[0][0] * X + transform_cam2base[0][1] * Y + transform_cam2base[0][2] * Z + transform_cam2base[0][3]);
