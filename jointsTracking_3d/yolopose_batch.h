@@ -22,13 +22,13 @@ private:
     torch::DeviceType devicetype;
     torch::Device* device;
 
-    std::string yolofilePath = "yolov8m-pose_320_640.torchscript";
-    const int originalWidth = 320;
-    const int originalHeight = 320;
+    std::string yolofilePath = "yolov8m-pose_640_1280.torchscript";
+    const int originalWidth = 640;
+    const int originalHeight = 640;
     int frameWidth = 640;
-    int frameHeight = 320;
+    int frameHeight = 1280;
     const int yoloWidth = 640;
-    const int yoloHeight = 320;
+    const int yoloHeight = 1280;
     const cv::Size YOLOSize{ yoloWidth, yoloHeight };
     const float IoUThreshold = 0.1;
     const float ConfThreshold = 0.4;
@@ -133,7 +133,7 @@ public:
     {
         // run
         cv::Mat yoloimg; // define yolo img type
-        //cv::imwrite("input.jpg", frame);
+        cv::imwrite("input.jpg", frame);
         cv::cvtColor(frame, yoloimg, cv::COLOR_GRAY2RGB);
         cv::resize(yoloimg, yoloimg, YOLOSize);
         //cv::imwrite("yoloimg.jpg", yoloimg);
