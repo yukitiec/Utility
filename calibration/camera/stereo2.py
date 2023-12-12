@@ -215,7 +215,7 @@ class StereoVision:
                 print(filename_left, filename_right)
             img_left = cv2.imread(os.path.join(self.src, filename_left))
             img_right = cv2.imread(os.path.join(self.src, filename_right))
-            if random.random() > 0.3:
+            if random.random() > 0.6:
                 if len(img_left.shape) == 3:
                     # print(img.shape)
                     gray_left = cv2.cvtColor(img_left, cv2.COLOR_BGR2GRAY)
