@@ -10,46 +10,11 @@ class Triangulation
 private:
     const double BASELINE = 208.0;
 
-    cv::Mat cameraMatrix_left = (cv::Mat_<double>(3, 3) << 754.66874569, 0, 255.393104, // fx: focal length in x, cx: principal point x
-        0, 754.64708568, 335.6848201,                           // fy: focal length in y, cy: principal point y
-        0, 0, 1                                // 1: scaling factor
-        );
-    cv::Mat cameraMatrix_right = (cv::Mat_<double>(3, 3) << 802.62616415, 0, 286.48516862, // fx: focal length in x, cx: principal point x
-        0, 802.15806832, 293.54957668,                           // fy: focal length in y, cy: principal point y
-        0, 0, 1                                // 1: scaling factor
-        );
-    cv::Mat distCoeffs_left = (cv::Mat_<double>(1, 5) << -0.00661832, -0.19633213, 0.00759942, -0.01391234, 0.73355661);
-    cv::Mat distCoeffs_right = (cv::Mat_<double>(1, 5) << 0.00586444, -0.18180071, 0.00489287, -0.00392576, 1.20394993);
-    cv::Mat R_left = (cv::Mat_<double>(3, 3) << 1.0, 0.0, 0.0, // fx: focal length in x, cx: principal point x
-        0.0, 1.0, 0.0,                           // fy: focal length in y, cy: principal point y
-        0.0, 0.0, 1.0                                // 1: scaling factor
-        );
-    cv::Mat R_right = (cv::Mat_<double>(3, 3) << 1.0, 0.0, 0.0, // fx: focal length in x, cx: principal point x
-        0.0, 1.0, 0.0,                           // fy: focal length in y, cy: principal point y
-        0.0, 0.0, 1.0                                // 1: scaling factor
-        );
-    cv::Mat T_left = (cv::Mat_<double>(3, 1) << 0.0,0.0,0.0);
-    cv::Mat T_right = (cv::Mat_<double>(3, 1) << 0.0, 0.0, 0.0);
-    cv::Mat projectMatrix_left = (cv::Mat_<double>(3, 4) << 375.5, 0, 249.76, 0, // fx: focal length in x, cx: principal point x
-        0, 375.5, 231.0285, 0,                           // fy: focal length in y, cy: principal point y
-        0, 0, 1, 0                                // 1: scaling factor
-        );
-    cv::Mat projectMatrix_right = (cv::Mat_<double>(3, 4) << 375.5, 0, 249.76, -280, // fx: focal length in x, cx: principal point x
-        0, 375.5, 231.028, 0,                           // fy: focal length in y, cy: principal point y
-        0, 0, 1, 0                               // 1: scaling factor
-        );
     const cv::Mat transform_cam2base = (cv::Mat_<double>(4, 4) << 1.0, 0.0, 0.0, 0.0, // fx: focal length in x, cx: principal point x
         0.0, 1.0, 0.0, 0.0,                           // fy: focal length in y, cy: principal point y
         0.0, 0.0, 1.0, 0.0,                              // 1: scaling factor
         0.0, 0.0, 0.0, 1.0
         );
-    const double fX = (cameraMatrix_left.at<double>(0, 0) + cameraMatrix_right.at<double>(0, 0)) / 2;
-    const double fY = (cameraMatrix_left.at<double>(1, 1) + cameraMatrix_right.at<double>(1, 1)) / 2;
-    const double fSkew = (cameraMatrix_left.at<double>(0, 1) + cameraMatrix_right.at<double>(0, 1)) / 2;
-    const double oX_left = cameraMatrix_left.at<double>(0, 2);
-    const double oX_right = cameraMatrix_right.at<double>(0, 2);
-    const double oY_left = cameraMatrix_left.at<double>(1, 2);
-    const double oY_right = cameraMatrix_right.at<double>(1, 2);
 
     const std::string sign_save = "s";//save sign.
     const std::string sign_quit = "q";//continue sign.
@@ -194,6 +159,43 @@ private:
     }
 
 public:
+    cv::Mat cameraMatrix_left = (cv::Mat_<double>(3, 3) << 754.66874569, 0, 255.393104, // fx: focal length in x, cx: principal point x
+        0, 754.64708568, 335.6848201,                           // fy: focal length in y, cy: principal point y
+        0, 0, 1                                // 1: scaling factor
+        );
+    cv::Mat cameraMatrix_right = (cv::Mat_<double>(3, 3) << 802.62616415, 0, 286.48516862, // fx: focal length in x, cx: principal point x
+        0, 802.15806832, 293.54957668,                           // fy: focal length in y, cy: principal point y
+        0, 0, 1                                // 1: scaling factor
+        );
+    cv::Mat distCoeffs_left = (cv::Mat_<double>(1, 5) << -0.00661832, -0.19633213, 0.00759942, -0.01391234, 0.73355661);
+    cv::Mat distCoeffs_right = (cv::Mat_<double>(1, 5) << 0.00586444, -0.18180071, 0.00489287, -0.00392576, 1.20394993);
+    cv::Mat R_left = (cv::Mat_<double>(3, 3) << 1.0, 0.0, 0.0, // fx: focal length in x, cx: principal point x
+        0.0, 1.0, 0.0,                           // fy: focal length in y, cy: principal point y
+        0.0, 0.0, 1.0                                // 1: scaling factor
+        );
+    cv::Mat R_right = (cv::Mat_<double>(3, 3) << 1.0, 0.0, 0.0, // fx: focal length in x, cx: principal point x
+        0.0, 1.0, 0.0,                           // fy: focal length in y, cy: principal point y
+        0.0, 0.0, 1.0                                // 1: scaling factor
+        );
+    cv::Mat T_left = (cv::Mat_<double>(3, 1) << 0.0, 0.0, 0.0);
+    cv::Mat T_right = (cv::Mat_<double>(3, 1) << 0.0, 0.0, 0.0);
+    cv::Mat projectMatrix_left = (cv::Mat_<double>(3, 4) << 375.5, 0, 249.76, 0, // fx: focal length in x, cx: principal point x
+        0, 375.5, 231.0285, 0,                           // fy: focal length in y, cy: principal point y
+        0, 0, 1, 0                                // 1: scaling factor
+        );
+    cv::Mat projectMatrix_right = (cv::Mat_<double>(3, 4) << 375.5, 0, 249.76, -280, // fx: focal length in x, cx: principal point x
+        0, 375.5, 231.028, 0,                           // fy: focal length in y, cy: principal point y
+        0, 0, 1, 0                               // 1: scaling factor
+        );
+
+    const double fX = (cameraMatrix_left.at<double>(0, 0) + cameraMatrix_right.at<double>(0, 0)) / 2;
+    const double fY = (cameraMatrix_left.at<double>(1, 1) + cameraMatrix_right.at<double>(1, 1)) / 2;
+    const double fSkew = (cameraMatrix_left.at<double>(0, 1) + cameraMatrix_right.at<double>(0, 1)) / 2;
+    const double oX_left = cameraMatrix_left.at<double>(0, 2);
+    const double oX_right = cameraMatrix_right.at<double>(0, 2);
+    const double oY_left = cameraMatrix_left.at<double>(1, 2);
+    const double oY_right = cameraMatrix_right.at<double>(1, 2);
+
     Triangulation(std::string& file_intrinsic_left,std::string& file_intrinsic_right, std::string& file_extrinsic_left, std::string& file_extrinsic_right)
     {
         std::cout << "construct Triangulation class" << std::endl;

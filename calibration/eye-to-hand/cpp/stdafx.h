@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 #include <cmath>
 #include <filesystem>
+#include <algorithm>
 
 //Matrix
 #include <eigen3/Eigen/Dense>
