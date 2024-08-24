@@ -16,7 +16,7 @@ void Triangulation::dlt(std::vector<cv::Point2d>& points_left, std::vector<cv::P
 {
     /**
     * @brief calculate 3D points with DLT method
-    * @param[in] points_left, points_right {n_data,(xCenter,yCenter)}
+    * @param[in] points_left, points_right {n_data,(xCenter,yCenter)}. These points are from undistorted images.
     * @param[out] reuslts 3D points storage. shape is like (n_data, (x,y,z))
     */
     cv::Mat points_left_mat(points_left);
@@ -24,15 +24,28 @@ void Triangulation::dlt(std::vector<cv::Point2d>& points_left, std::vector<cv::P
     cv::Mat points_right_mat(points_right);
     cv::Mat undistorted_points_right_mat;
 
+    cv::Mat points_left_homogeneous(2, points_left.size(), CV_64F);
+    cv::Mat points_right_homogeneous(2, points_right.size(), CV_64F);
+
+    for (size_t i = 0; i < points_left.size(); i++) {
+        points_left_homogeneous.at<double>(0, i) = points_left[i].x;
+        points_left_homogeneous.at<double>(1, i) = points_left[i].y;
+        //points_left_homogeneous.at<double>(2, i) = 1.0;
+
+        points_right_homogeneous.at<double>(0, i) = points_right[i].x;
+        points_right_homogeneous.at<double>(1, i) = points_right[i].y;
+        //points_right_homogeneous.at<double>(2, i) = 1.0;
+    }
+
     // Undistort the points
-    cv::undistortPoints(points_left_mat, undistorted_points_left_mat, cameraMatrix_left, distCoeffs_left);
-    cv::undistortPoints(points_right_mat, undistorted_points_right_mat, cameraMatrix_right, distCoeffs_right);
+    //cv::undistortPoints(points_left_mat, undistorted_points_left_mat, cameraMatrix_left, distCoeffs_left);
+    //cv::undistortPoints(points_right_mat, undistorted_points_right_mat, cameraMatrix_right, distCoeffs_right);
 
     // Reproject normalized coordinates to pixel coordinates
-    cv::Mat normalized_points_left(undistorted_points_left_mat.rows, 1, CV_64FC2);
-    cv::Mat normalized_points_right(undistorted_points_right_mat.rows, 1, CV_64FC2);
+    //cv::Mat normalized_points_left(undistorted_points_left_mat.rows, 1, CV_64FC2);
+    //cv::Mat normalized_points_right(undistorted_points_right_mat.rows, 1, CV_64FC2);
 
-    for (int i = 0; i < undistorted_points_left_mat.rows; ++i) {
+    /*for (int i = 0; i < undistorted_points_left_mat.rows; ++i) {
         double x, y;
         x = undistorted_points_left_mat.at<cv::Vec2d>(i, 0)[0];
         y = undistorted_points_left_mat.at<cv::Vec2d>(i, 0)[1];
@@ -43,27 +56,27 @@ void Triangulation::dlt(std::vector<cv::Point2d>& points_left, std::vector<cv::P
         y = undistorted_points_right_mat.at<cv::Vec2d>(i, 0)[1];
         normalized_points_right.at<cv::Vec2d>(i, 0)[0] = cameraMatrix_right.at<double>(0, 0) * x + cameraMatrix_right.at<double>(0, 2);
         normalized_points_right.at<cv::Vec2d>(i, 0)[1] = cameraMatrix_right.at<double>(1, 1) * y + cameraMatrix_right.at<double>(1, 2);
-    }
+    }*/
 
     // Output matrix for the 3D points
     cv::Mat triangulated_points_mat;
 
     // Triangulate points
-    cv::triangulatePoints(projectMatrix_left, projectMatrix_right, normalized_points_left, normalized_points_right, triangulated_points_mat);
-    //cv::triangulatePoints(projectMatrix_left, projectMatrix_right, undistorted_points_left_mat, undistorted_points_right_mat, triangulated_points_mat);
+    //cv::triangulatePoints(projectMatrix_left, projectMatrix_right, normalized_points_left, normalized_points_right, triangulated_points_mat);
+    cv::triangulatePoints(projectMatrix_left, projectMatrix_right, points_left_homogeneous, points_right_homogeneous, triangulated_points_mat);
 
     // Convert homogeneous coordinates to 3D points
     triangulated_points_mat=triangulated_points_mat.t();
-    cv::convertPointsFromHomogeneous(triangulated_points_mat.reshape(4), triangulated_points_mat);
+
+    cv::Mat points_3d;
+    cv::convertPointsFromHomogeneous(triangulated_points_mat.reshape(4), points_3d);//input should be 4 channels inputs.-> triangulated_points_mat : (4,20)-> .reshape(4) : (1,20,4). channels are 4.
 
     // Access triangulated 3D points
     results.clear();
 
-    for (int i = 0; i < triangulated_points_mat.rows; i++) {
-        cv::Point3d point;
-        point.x = triangulated_points_mat.at<double>(i, 0);
-        point.y = triangulated_points_mat.at<double>(i, 1);
-        point.z = triangulated_points_mat.at<double>(i, 2);
+    cv::Point3d point;
+    for (int i = 0; i < points_3d.rows; i++) {
+        point = points_3d.at<cv::Point3d>(i);
         results.push_back(point);
     }
     

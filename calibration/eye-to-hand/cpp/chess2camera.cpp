@@ -49,12 +49,14 @@ void Chess2camera::main(std::string& rootData) {
 
     //3.get corners and display. And check whether original points is correct. -> get camera pose against chessboards
     //left
-    getPose(rootUndistort_left, rootDraw_left, imgs_left, points_left, rvecs_left, tvecs_left);
+    getPose(rootUndistort_left, rootDraw_left, imgs_left, points_left, rvecs_left, tvecs_left,true);
     //right
-    getPose(rootUndistort_right, rootDraw_right, imgs_right, points_right, rvecs_right, tvecs_right);    
+    getPose(rootUndistort_right, rootDraw_right, imgs_right, points_right, rvecs_right, tvecs_right,false);    
 }
 
-void Chess2camera::getPose(std::string& rootUndistort, std::string& rootDraw,std::vector<cv::Mat>& imgs,std::vector<cv::Point2d>& points,std::vector<cv::Mat>& rvecs, std::vector<cv::Mat>& tvecs) {
+void Chess2camera::getPose(std::string& rootUndistort, std::string& rootDraw,
+    std::vector<cv::Mat>& imgs,std::vector<cv::Point2d>& points,std::vector<cv::Mat>& rvecs, std::vector<cv::Mat>& tvecs,
+    bool bool_left) {
     //variables
     cv::Mat rvec, tvec;
     cv::Mat undistortedImage;
@@ -62,10 +64,14 @@ void Chess2camera::getPose(std::string& rootUndistort, std::string& rootDraw,std
     std::string filename;
     int idx_image = 1;
 
-
+    std::string winName = "Detected Corners";
+    cv::namedWindow(winName);
     for (cv::Mat& image : imgs) {
         //undistort image.
-        cv::undistort(image, undistortedImage, tri.cameraMatrix_left, tri.distCoeffs_left);
+        if (bool_left)
+            cv::undistort(image, undistortedImage, tri.cameraMatrix_left, tri.distCoeffs_left);
+        else
+            cv::undistort(image, undistortedImage, tri.cameraMatrix_right, tri.distCoeffs_right);
 
         //initialize
         filenameStream.str("");
@@ -79,13 +85,13 @@ void Chess2camera::getPose(std::string& rootUndistort, std::string& rootDraw,std
         cv::cvtColor(undistortedImage, gray, cv::COLOR_BGR2GRAY);
 
         // Find chessboard corners
-        std::vector<cv::Point2f> corners, corners_tmp;
+        std::vector<cv::Point2f> corners, corners_tmp,corners_tmp2;
         bool found = cv::findChessboardCorners(gray, cv::Size(width, height), corners,
             cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE);
         if (found) {
             // Refine corner locations
             cv::cornerSubPix(gray, corners, cv::Size(7, 7), cv::Size(-1, -1),
-                cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 50, 0.03));
+                cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 100, 0.00001));
 
             // Draw circles on detected corners
             int counter_corner = 0; int bool_reverse = 0;//not reverse.
@@ -99,9 +105,9 @@ void Chess2camera::getPose(std::string& rootUndistort, std::string& rootDraw,std
             }
 
             // Show the image with detected corners
-            cv::imwrite("detected.png", image_draw);
-            //cv::imshow("Detected Corners", image_draw);
-
+            //cv::imwrite("detected.png", image_draw);
+            cv::imshow(winName, image_draw);
+            cv::waitKey(10);
             std::cout << "Will you reverse corners order? 0:Okay, 1:reverse corners, 2:change direction, 3:reverse and change direction :: " << std::endl;
             std::cin >> bool_reverse;
 
@@ -119,7 +125,7 @@ void Chess2camera::getPose(std::string& rootUndistort, std::string& rootDraw,std
                         if (counter_corner == 0)//first corner
                             cv::circle(image_draw, corner, 5, cv::Scalar(255, 0, 0), -1);//B
                         else//others
-                            cv::circle(image_draw, corner, 5, cv::Scalar(0, 0, std::abs((255 - counter_corner * 10) % 255)), -1);//R
+                            cv::circle(image_draw, corner, 5, cv::Scalar(0, 0, std::abs((255 - counter_corner * 50) % 255)), -1);//R
                         counter_corner++;
                     }
                 }
@@ -139,18 +145,19 @@ void Chess2camera::getPose(std::string& rootUndistort, std::string& rootDraw,std
                         if (counter_corner == 0)//first corner
                             cv::circle(image_draw, corner, 5, cv::Scalar(255, 0, 0), -1);//B
                         else//others
-                            cv::circle(image_draw, corner, 5, cv::Scalar(0, 0, std::abs((255 - counter_corner * 10) % 255)), -1);//R
+                            cv::circle(image_draw, corner, 5, cv::Scalar(0, 0, std::abs((counter_corner * 50) % 255)), -1);//R
                         counter_corner++;
                     }
                 }
                 else if (bool_reverse == 3) {//other direction and reverse
-                    std::reverse(corners.begin(), corners.end());
+                    corners_tmp2 = corners;
+                    std::reverse(corners_tmp2.begin(), corners_tmp2.end());
                     int idx = 0; int max_idx;
                     for (int row = 0; row < height; row++) {//for each row
                         max_idx = row * width - 1;//max index
                         for (int col = 0; col < width; col++) {//for each column
                             idx = row * width + col;
-                            corners_tmp[idx] = corners[max_idx - col];
+                            corners_tmp[idx] = corners_tmp2[max_idx - col];
                         }
                     }
                     //save
@@ -160,13 +167,13 @@ void Chess2camera::getPose(std::string& rootUndistort, std::string& rootDraw,std
                         if (counter_corner == 0)//first corner
                             cv::circle(image_draw, corner, 5, cv::Scalar(255, 0, 0), -1);//B
                         else//others
-                            cv::circle(image_draw, corner, 5, cv::Scalar(0, 0, std::abs((255 - counter_corner * 10) % 255)), -1);//R
+                            cv::circle(image_draw, corner, 5, cv::Scalar(0, 0, std::abs((255 - counter_corner * 50) % 255)), -1);//R
                         counter_corner++;
                     }
                 }
-                cv::imwrite("detected.png", image_draw);
-                //cv::imshow("Detected Corners", image_draw);
-
+                //cv::imwrite("detected.png", image_draw);
+                cv::imshow(winName, image_draw);
+                cv::waitKey(10);
                 std::cout << "Is this Okay? 0:Okay, 1:reverse corners, 2:change direction, 3:reverse and change direction :: " << std::endl;
                 std::cin >> bool_reverse;
             }
@@ -192,7 +199,7 @@ void Chess2camera::getPose(std::string& rootUndistort, std::string& rootDraw,std
                 {0, 0, (float)size}
             };
 
-            //3.calculate H_Camera2Chess with cv::solvePnP -> rotation vector and translation.
+            //3.calculate H_Chess2camera with cv::solvePnP -> rotation vector and translation.
             //calculate camera pose against chessboard.
             cv::solvePnP(objectPoints, corners, tri.cameraMatrix_left, tri.distCoeffs_left, rvec, tvec);
             //save rvec and tvec.
@@ -214,7 +221,7 @@ void Chess2camera::getPose(std::string& rootUndistort, std::string& rootDraw,std
         else {
             std::cerr << "Chessboard corners not found!" << std::endl;
         }
-
+        cv::destroyWindow(winName);
         //increment
         idx_image++;
     }

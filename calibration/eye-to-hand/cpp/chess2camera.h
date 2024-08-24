@@ -47,9 +47,10 @@ public:
     * @param[in] imgs images to check
     * @oaram[out] points original points of the chessboard
     * @param[out] rvecs,tvecs rotation and translation vector
+    * @param[in] bool_left whether images are from left.
     */
     void getPose(std::string& rootUndistort, std::string& rootDraw, std::vector<cv::Mat>& imgs, std::vector<cv::Point2d>& points, 
-        std::vector<cv::Mat>& rvecs, std::vector<cv::Mat>& tvecs);
+        std::vector<cv::Mat>& rvecs, std::vector<cv::Mat>& tvecs, bool bool_left);
 
     /**
     * @brief make a directory.
